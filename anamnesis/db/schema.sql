@@ -45,7 +45,12 @@ CREATE TABLE IF NOT EXISTS memory_audit (
     at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS memory_audit_at_idx ON memory_audit (at DESC);
+-- Hash-sharded: `at` is monotonically increasing, so a plain B-tree index
+-- on it would concentrate every audit write on one hot range. Sharding
+-- distributes writes across ranges while still supporting ORDER BY at DESC.
+CREATE INDEX IF NOT EXISTS memory_audit_at_idx
+    ON memory_audit (at DESC)
+    USING HASH WITH (bucket_count = 8);
 
 CREATE TABLE IF NOT EXISTS ops_log (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

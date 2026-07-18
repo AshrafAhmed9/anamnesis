@@ -24,7 +24,7 @@ This provisions:
 
 ## ccloud CLI ops sub-agent — setup
 
-The `OpsAgentFunction` shells out to the `ccloud` binary, which is not a Python package, so it must be bundled as a **Lambda layer** containing the `ccloud` binary (linux/amd64) or run the ops agent as a container-image Lambda instead of a zip Lambda. For the hackathon demo we run it both ways:
+The `OpsAgentFunction` shells out to the `ccloud` binary, which is not a Python package, so it must be bundled as a **Lambda layer** containing the `ccloud` binary (linux/arm64, matching this template's `Architectures: [arm64]`) or run the ops agent as a container-image Lambda instead of a zip Lambda. For the hackathon demo we run it both ways:
 - **Locally / in the demo video**: run `python -m app.lambda_handlers.ops_agent` directly from a machine with `ccloud` installed and authenticated (`ccloud auth login`) — this is what the video shows.
 - **In AWS**: package a container image (`Dockerfile.ops-agent`, not included by default) that installs `ccloud` in the base image, and swap `OpsAgentFunction`'s `Handler`/`ImageUri` accordingly. This is documented as a "next step" rather than shipped by default, to avoid bundling a large third-party binary in the submission repo.
 
@@ -43,7 +43,7 @@ ccloud role-binding create \
   --resource-id <your-cluster-id>
 ```
 
-Store the resulting API key as `CCLOUD_API_KEY` (Lambda environment variable / Secrets Manager) — never the org admin key.
+Store the resulting API key in AWS Secrets Manager, never the org admin key. **Known gap**: we have not verified `ccloud`'s exact non-interactive/service-account authentication mechanism for unattended use in a Lambda container (its interactive `ccloud auth login` opens a browser, which obviously doesn't work inside Lambda) — confirm the current mechanism against the `ccloud` reference docs before wiring the container-image Lambda described below. For the hackathon demo itself, the ops agent runs from a local machine with `ccloud auth login` already completed interactively (see the video).
 
 ## CockroachDB Managed MCP Server — judge's guide
 

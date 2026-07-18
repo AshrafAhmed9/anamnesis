@@ -12,3 +12,8 @@ build/
 node_modules/
 .DS_Store
 *.log
+
+# Installed by `npx skills add cockroachlabs/cockroachdb-skills` (see .claude-skills/README.md)
+# skills-lock.json IS committed — it's the reproducibility/provenance record.
+.agents/skills/
+.claude/skills/

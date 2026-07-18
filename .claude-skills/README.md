@@ -1,22 +1,58 @@
 # CockroachDB Agent Skills used in this project
 
-This project's development workflow used skills from the
-[CockroachDB Agent Skills Repo](https://github.com/cockroachdb/agent-skills)
-(open source) during schema design and query tuning — specifically the
-schema-design and vector-indexing skills, loaded into Claude Code while
-authoring `anamnesis/db/schema.sql` and the ANN queries in
-`anamnesis/memory.py`.
+This project installed and used real skills from the official, open-source
+[CockroachDB Agent Skills Repo](https://github.com/cockroachlabs/cockroachdb-skills)
+(`cockroachlabs/cockroachdb-skills`, Apache-2.0), via:
 
-To reproduce: clone the skills repo and point your MCP-compatible client
-(Claude Code, Cursor, etc.) at it per its README, then work in this repo as
-normal — the skills activate automatically on CockroachDB-related prompts
-(e.g. "design a vector index for embedding recall").
+```bash
+npx skills add cockroachlabs/cockroachdb-skills
+```
 
-**Tool feedback (submission's optional item):** the schema-design skill's
-guidance on `CREATE VECTOR INDEX` usage was accurate and saved a debugging
-cycle; we did hit one real rough edge worth flagging to Cockroach Labs —
-`feature.vector_index.enabled` is off by default on a fresh cluster and the
-skill/docs we found didn't call that out, which produced a
-`FeatureNotSupported` error on first migration. We'd suggest surfacing that
-cluster setting requirement (or defaulting it on) directly in the vector
-index quickstart docs.
+which populates `.agents/skills/` in this repo (35 skills, symlinked for
+Claude Code). Two skills were concretely applied, not just installed:
+
+## `designing-application-transactions`
+
+Applied while hardening the retry engine in `anamnesis/db/engine.py` and
+`anamnesis/memory.py`. The skill's first rule — "transactions must include
+only the minimal set of SQL operations; do not place remote API calls
+inside a CockroachDB transaction, since a retried transaction would
+otherwise re-issue them" — caught a real bug in the original
+implementation: `detect_and_resolve_contradiction()` and `consolidate()`
+both called the Bedrock LLM *inside* the retryable transaction body. That
+meant a retry would re-issue the (slow, costly, non-deterministic) LLM
+call, not just redo the database write. Both methods were restructured so
+the LLM call happens once, before the transaction opens, and only
+deterministic reads/writes are retried — with a fresh in-transaction
+re-check that a candidate belief wasn't superseded by something else in
+the gap, since the pre-read can now be stale by the time the write
+transaction runs.
+
+## `cockroachdb-sql`
+
+Applied to review the schema in `anamnesis/db/schema.sql` against the
+skill's `04-optimization.md` rules. It flagged `memory_audit_at_idx`, a
+plain B-tree index on `memory_audit(at DESC)`, as a hotspot risk: `at` is
+monotonically increasing, so every audit write would land on the same
+range. Fixed with a hash-sharded index (`USING HASH WITH (bucket_count =
+8)`) — see `migrations/versions/0002_hash_shard_audit_index.py` — which
+was verified via `SHOW INDEXES FROM memory_audit` on both the local dev
+cluster and the live CockroachDB Cloud cluster to confirm the shard column
+is actually present.
+
+## Tool feedback (submission's optional item)
+
+- The `cockroachdb-sql` skill's optimization rules were directly actionable
+  and caught a real design flaw we'd have shipped otherwise (the hotspot
+  index above).
+- One rough edge unrelated to the skills themselves: a fresh CockroachDB
+  Cloud cluster has `feature.vector_index.enabled` off by default, and
+  `CREATE VECTOR INDEX` fails with a generic `FeatureNotSupported` error
+  rather than pointing at the setting to flip. We'd suggest either
+  defaulting it on for new clusters or having the error message name the
+  cluster setting directly.
+- `SET CLUSTER SETTING` cannot run inside a driver's default transactional
+  connection (`psycopg`/SQLAlchemy wrap statements in an implicit
+  transaction) — it needs `isolation_level="AUTOCOMMIT"` explicitly. Worth
+  a callout in the vector-indexing quickstart for anyone driving setup
+  from application code rather than the `cockroach sql` shell.

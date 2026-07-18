@@ -180,10 +180,19 @@ class Anamnesis:
         If it semantically contradicts an existing belief (nearby in
         embedding space + LLM confirms the contradiction), the old belief
         is superseded and the new one recorded — atomically, with audit.
+
+        The embedding call and the contradiction-judgment LLM call are both
+        made *before* opening the write transaction — per CockroachDB's own
+        application-transaction guidance, external network calls must not
+        live inside a transaction body, since a retry would otherwise
+        re-issue them (wasted latency/cost, and a non-deterministic LLM
+        judgment could differ across retries). The transaction body only
+        does deterministic reads/writes, so it's safe and cheap to redo
+        from scratch on a retry.
         """
         new_vec = self.llm.embed(new_belief_text)
 
-        def _do(db):
+        with session_scope() as db:
             candidates = db.execute(
                 text(
                     """
@@ -197,16 +206,17 @@ class Anamnesis:
                 {"qv": _vec_literal(new_vec)},
             ).fetchall()
 
-            contradicted: Belief | None = None
-            for row in candidates:
-                existing_embedding = _parse_vec_literal(row.embedding)
-                dist = _cosine_distance(new_vec, existing_embedding)
-                if dist < CONTRADICTION_SIM_THRESHOLD and self._llm_confirms_contradiction(
-                    row.belief, new_belief_text
-                ):
-                    contradicted = Belief(row.id, row.belief, row.confidence, row.valid_from, row.valid_to, row.superseded_by)
-                    break
+        contradicted_id: uuid.UUID | None = None
+        for row in candidates:
+            existing_embedding = _parse_vec_literal(row.embedding)
+            dist = _cosine_distance(new_vec, existing_embedding)
+            if dist < CONTRADICTION_SIM_THRESHOLD and self._llm_confirms_contradiction(
+                row.belief, new_belief_text
+            ):
+                contradicted_id = row.id
+                break
 
+        def _do(db):
             new_belief = SemanticMemory(
                 belief=new_belief_text,
                 embedding=new_vec,
@@ -216,17 +226,22 @@ class Anamnesis:
             db.add(new_belief)
             db.flush()
 
-            if contradicted is not None:
-                old = db.get(SemanticMemory, contradicted.id)
-                old.valid_to = datetime.now(timezone.utc)
-                old.superseded_by = new_belief.id
-                db.add(
-                    MemoryAudit(
-                        action="SUPERSEDE",
-                        memory_id=old.id,
-                        reason=f"contradicted by new belief {new_belief.id}: {new_belief_text!r}",
+            if contradicted_id is not None:
+                # Re-fetch inside the transaction rather than trusting the
+                # pre-read candidate, and re-check it's still active — it
+                # may have been superseded by something else between our
+                # read above and this write.
+                old = db.get(SemanticMemory, contradicted_id)
+                if old is not None and old.valid_to is None:
+                    old.valid_to = datetime.now(timezone.utc)
+                    old.superseded_by = new_belief.id
+                    db.add(
+                        MemoryAudit(
+                            action="SUPERSEDE",
+                            memory_id=old.id,
+                            reason=f"contradicted by new belief {new_belief.id}: {new_belief_text!r}",
+                        )
                     )
-                )
 
             db.add(MemoryAudit(action="WRITE", memory_id=new_belief.id, reason="semantic belief recorded"))
 
@@ -257,8 +272,15 @@ class Anamnesis:
         writes the resulting semantic rows with provenance + audit — all in
         one transaction per cluster so a partial consolidation is never
         visible.
+
+        Reading the candidate episodes and calling the LLM both happen
+        before the write transaction opens, for the same reason as in
+        `detect_and_resolve_contradiction`: a retried transaction must not
+        re-issue an external LLM call. The write transaction re-filters to
+        still-unconsolidated episodes so a race with a concurrent
+        consolidation/decay is handled safely rather than assumed away.
         """
-        def _do(db):
+        with session_scope() as db:
             query = select(EpisodicMemory).where(
                 EpisodicMemory.consolidated.is_(False),
                 EpisodicMemory.salience < DECAY_SALIENCE_THRESHOLD + 0.5,
@@ -266,35 +288,45 @@ class Anamnesis:
             if session_id is not None:
                 query = query.where(EpisodicMemory.session_id == session_id)
             episodes = db.execute(query.order_by(EpisodicMemory.created_at)).scalars().all()
-
-            if len(episodes) < min_cluster_size:
-                return []
-
+            episode_ids = [e.id for e in episodes]
             transcript = "\n".join(f"- ({e.role}) {e.content}" for e in episodes)
-            summary = self.llm.chat(
-                [
-                    ChatMessage(
-                        role="user",
-                        content=(
-                            "Summarize the following conversation snippets into one concise "
-                            "belief statement about the user (a single sentence, factual, "
-                            "no hedging):\n\n" + transcript
-                        ),
-                    )
-                ]
-            ).strip()
 
-            summary_vec = self.llm.embed(summary)
+        if len(episode_ids) < min_cluster_size:
+            return []
+
+        summary = self.llm.chat(
+            [
+                ChatMessage(
+                    role="user",
+                    content=(
+                        "Summarize the following conversation snippets into one concise "
+                        "belief statement about the user (a single sentence, factual, "
+                        "no hedging):\n\n" + transcript
+                    ),
+                )
+            ]
+        ).strip()
+        summary_vec = self.llm.embed(summary)
+
+        def _do(db):
+            current = db.execute(
+                select(EpisodicMemory).where(
+                    EpisodicMemory.id.in_(episode_ids), EpisodicMemory.consolidated.is_(False)
+                )
+            ).scalars().all()
+            if len(current) < min_cluster_size:
+                return []  # lost the race to a concurrent consolidation/decay
+
             belief = SemanticMemory(
                 belief=summary,
                 embedding=summary_vec,
                 confidence=0.6,
-                source_episodes=[e.id for e in episodes],
+                source_episodes=[e.id for e in current],
             )
             db.add(belief)
             db.flush()
 
-            for e in episodes:
+            for e in current:
                 e.consolidated = True
                 e.salience = max(0.0, e.salience - 0.3)
 
@@ -302,8 +334,8 @@ class Anamnesis:
                 MemoryAudit(
                     action="CONSOLIDATE",
                     memory_id=belief.id,
-                    reason=f"folded {len(episodes)} episodes into belief",
-                    metadata_={"episode_ids": [str(e.id) for e in episodes]},
+                    reason=f"folded {len(current)} episodes into belief",
+                    metadata_={"episode_ids": [str(e.id) for e in current]},
                 )
             )
             return [belief.id]
