@@ -30,6 +30,8 @@ source of truth — CockroachDB, not a bolted-on ANN index.
 
 ## Architecture
 
+![Anamnesis architecture diagram](docs/architecture.png)
+
 ```
 React/HTML UI (chat + live memory panel)
         │
