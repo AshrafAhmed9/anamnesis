@@ -1,0 +1,55 @@
+$ python3 scripts/node_kill_demo.py
+
+Connection is currently served by container: infra-crdb-1-1
+Writing 30 memories; will `docker kill infra-crdb-1-1` after write #8.
+
+  write  1/30  OK       40.8ms
+  write  2/30  OK       19.8ms
+  write  3/30  OK       22.3ms
+  write  4/30  OK       19.0ms
+  write  5/30  OK       23.3ms
+  write  6/30  OK       19.5ms
+  write  7/30  OK       21.1ms
+  write  8/30  OK       19.4ms
+
+  >>> docker kill infra-crdb-1-1 <<<
+
+  write  9/30  OK     3142.8ms   <- failover cost: connection to killed node timed out,
+                                     client failed over to a surviving node, write retried and landed
+  write 10/30  OK       32.3ms
+  write 11/30  OK       35.7ms
+  write 12/30  OK       38.4ms
+  write 13/30  OK       22.1ms
+  write 14/30  OK       25.8ms
+  write 15/30  OK       25.6ms
+  write 16/30  OK       68.8ms
+  write 17/30  OK       37.9ms
+  write 18/30  OK       37.1ms
+  write 19/30  OK       25.2ms
+  write 20/30  OK       24.0ms
+  write 21/30  OK       28.9ms
+  write 22/30  OK       23.7ms
+  write 23/30  OK       23.7ms
+  write 24/30  OK       21.6ms
+  write 25/30  OK       18.9ms
+  write 26/30  OK       47.8ms
+  write 27/30  OK       38.7ms
+  write 28/30  OK       38.2ms
+  write 29/30  OK       30.4ms
+  write 30/30  OK       32.8ms
+
+30/30 writes succeeded with infra-crdb-1-1 killed mid-run (that container was actually
+serving the connection, confirmed via node_id lookup).
+Every write landed despite the killed node — cluster-level survivability confirmed.
+
+Restart the node with: docker start infra-crdb-1-1
+
+--- Summary ---
+Node killed:          infra-crdb-1-1 (verified as the node actually serving the connection)
+Writes attempted:      30
+Writes lost:           0
+Failover latency cost: one write (#9) took 3142.8ms vs a baseline of ~20-40ms;
+                        every write before and after was in the normal range.
+Run against:            local 3-node CockroachDB v25.2 cluster (docker compose),
+                        via anamnesis.memory.Anamnesis.remember() — the real
+                        application code path, not a synthetic test.

@@ -1,4 +1,4 @@
-.PHONY: dev-db migrate test run ui clean-dev-db
+.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down
 
 dev-db:
 	docker rm -f anamnesis-crdb 2>/dev/null || true
@@ -24,3 +24,31 @@ ui:
 
 clean-dev-db:
 	docker rm -f anamnesis-crdb 2>/dev/null || true
+
+# --- Quantified results (see SUBMISSION.md) ---
+
+benchmark:
+	docker exec anamnesis-crdb ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_bench_single;"
+	python3 scripts/benchmark.py
+
+scale-test:
+	docker exec anamnesis-crdb ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_scale;"
+	DATABASE_URL=cockroachdb+psycopg://root@localhost:26257/anamnesis_scale?sslmode=disable \
+		alembic upgrade head
+	python3 scripts/scale_test.py --rows 20000 --queries 100
+
+multinode-up:
+	docker compose -f infra/docker-compose.multinode.yml up -d
+	sleep 5
+	docker exec infra-crdb-1-1 ./cockroach init --insecure || true
+	sleep 3
+	docker exec infra-crdb-1-1 ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_bench;"
+	docker exec infra-crdb-1-1 ./cockroach sql --insecure -e "SET CLUSTER SETTING feature.vector_index.enabled = true;"
+	DATABASE_URL=cockroachdb+psycopg://root@localhost:26258/anamnesis_bench?sslmode=disable \
+		alembic upgrade head
+
+node-kill-demo:
+	python3 scripts/node_kill_demo.py
+
+multinode-down:
+	docker compose -f infra/docker-compose.multinode.yml down

@@ -1,6 +1,7 @@
 # 🪳 Anamnesis — Agentic Memory as a Distributed SQL Problem
 
 **Built for the [CockroachDB × AWS Hackathon](https://cockroachdb-ai.devpost.com) — Build with Agentic Memory.**
+**→ [SUBMISSION.md](SUBMISSION.md) maps every judging criterion to exact evidence in this repo.**
 
 > Everyone bolts a vector store onto an agent and calls it memory. Real memory is
 > *transactional, temporal, and self-correcting* — which makes it a database
@@ -15,6 +16,18 @@ Anamnesis is a memory layer for AI agents with:
 - **Consolidation & forgetting** — an LLM-driven job folds low-salience episodic chatter into durable semantic beliefs and decays what's no longer relevant.
 - **Full auditability** — every memory write, supersede, consolidation, decay, and transaction retry is logged to an immutable `memory_audit` table, in the same transaction as the change it records.
 - **Survivability** — memory writes are wrapped in CockroachDB SERIALIZABLE transactions with automatic client-side retry on both contention (SQLSTATE `40001`) and lost/killed connections mid-write (`connection_invalidated`); the whole unit of work — reads and writes — is redone from scratch on retry via `run_in_transaction()`, so a write either fully lands (episode + belief + audit together) or doesn't happen at all. Covered by a test that injects a simulated dropped connection and asserts the write survives.
+
+## Who this is for
+
+The demo agent is a **customer support agent** that remembers a specific
+customer across every ticket and session — not a generic "personal
+assistant." Concretely: a customer mentions they're on a Pro plan; three
+weeks later a different session references a billing question; the agent
+recalls the plan without being told again, and if the customer later says
+they downgraded, the agent catches the contradiction, updates its belief,
+and keeps a record of when the plan changed and why — the kind of thing a
+real support team needs (an accurate account history) and a plain
+vector-store chatbot cannot reliably do (see the benchmark below).
 
 ## Why this is a database problem, not a vector-store problem
 
@@ -74,6 +87,30 @@ S3: consolidation reports + conversation exports
 - **Amazon EventBridge** — schedules the consolidation (every 30 min) and ops-agent (hourly) Lambdas.
 - **Amazon S3** — consolidation reports and conversation exports.
 
+## Quantified results (not just claims)
+
+"Better than a vector store" is what every agentic-memory entry will say. Here's what we measured:
+
+| | Anamnesis | Naive vector-store-only memory |
+|---|---|---|
+| "What do you believe now" — correct | **9/12** | 2/12 |
+| Time-travel ("before the change") — correct | **10/12** | 8/12 |
+
+12 contradiction scenarios, run with real local embeddings (not a hash
+mock) against both a naive flat vector store and Anamnesis. Reproduce:
+`python3 scripts/benchmark.py` — full methodology and caveats in the
+script's docstring. Raw output: [`docs/results/benchmark_output.txt`](docs/results/benchmark_output.txt).
+
+**Scale** (the hackathon's own bar is "more than toy queries"):
+`CREATE VECTOR INDEX` ANN queries stayed under 50ms p99 with 20,000 real
+embeddings loaded — [`docs/results/scale_test_output.txt`](docs/results/scale_test_output.txt), reproduce with `python3 scripts/scale_test.py --rows 20000`.
+
+**Real database-level failure, not just simulated**: a script that kills
+an actual node in a live 3-node CockroachDB cluster mid-write-loop —
+identifying and killing the exact container the connection is really
+using, not a guess — and shows **30/30 writes still landed** (one paid a
+~3.1s failover cost). [`docs/results/node_kill_demo_output.txt`](docs/results/node_kill_demo_output.txt), reproduce with `scripts/node_kill_demo.py` (setup: `infra/docker-compose.multinode.yml`).
+
 ## The 6 demo moments
 
 1. **Persistence with provenance** — talk to the agent, restart everything, come back later — it remembers, citing when it learned each fact.
@@ -113,6 +150,8 @@ migrations/          Alembic migrations
 infra/               AWS SAM template + deployment/RBAC/MCP docs
 ui/                  Chat + live memory panel (static, no build step)
 tests/               pytest suite (runs against a real local CockroachDB via Docker)
+scripts/             Quantified benchmark, scale test, node-kill survivability demo (see SUBMISSION.md)
+docs/                Architecture diagram, results from the scripts above, Devpost draft
 .claude-skills/      Agent Skills Repo usage notes + tool feedback
 ```
 

@@ -1,0 +1,7 @@
+Anamnesis vs naive vector-store-only memory — 12 contradiction scenarios
+Run at: 2026-07-18T18:52:16.145996+00:00
+
+Metric                                          Anamnesis    Naive vector store
+-------------------------------------------------------------------------------
+"What do you believe now" — correct                  9/12                  2/12
+Time-travel ("before the change") — correct         10/12                  8/12

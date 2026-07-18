@@ -1,0 +1,36 @@
+Scale test: CockroachDB distributed vector index (CREATE VECTOR INDEX, C-SPANN)
+Run against: local single-node CockroachDB v25.2 (docker), real sentence-transformers
+embeddings (all-MiniLM-L6-v2, padded 384->1024 dims), real INSERT/SELECT through
+CockroachDB SQL — not a synthetic in-memory benchmark.
+
+Note: this is a single local node on ordinary hardware, not the distributed
+multi-node topology CockroachDB Cloud provides in production — the point here
+is proving the index performs at real scale, not toy scale, per the hackathon's
+own "more than toy queries" judging bar. Latency would improve on a properly
+distributed cluster with locality-aware routing.
+
+=== 5,000 rows ===
+Embedding throughput:  3491 sentences/s (CPU)
+Insert throughput:     301 rows/s (batches of 250, real CockroachDB transactions,
+                        retried via run_in_transaction on the SerializationFailure
+                        contention that bulk-loading a vector index at speed causes)
+ANN query latency (k=5, 50 queries):
+  p50: 8.6ms
+  p95: 23.0ms
+  p99: 29.8ms
+  max: 29.8ms
+
+=== 20,000 rows ===
+Embedding throughput:  3823 sentences/s (CPU)
+Insert throughput:     225 rows/s (batches of 250)
+ANN query latency (k=5, 100 queries):
+  p50: 15.7ms
+  p95: 25.8ms
+  p99: 47.5ms
+  max: 47.5ms
+
+Takeaway: 4x the data (5k -> 20k rows) roughly doubled p50/p99 latency, not a
+linear-scan-like 4x — consistent with the vector index actually doing
+sublinear approximate nearest-neighbor search rather than a full table scan.
+All queries stayed under 50ms even at 20k rows on a single local node with no
+tuning.
