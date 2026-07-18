@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Anamnesis — agentic memory on CockroachDB, deployed on AWS.
+  Chat API (Lambda function URL), scheduled consolidation (EventBridge),
+  scheduled ops introspection (ccloud), and an S3 bucket for reports.
+
+Parameters:
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: CockroachDB connection string (cockroachdb+psycopg://...)
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+  CockroachClusterId:
+    Type: String
+    Default: ""
+    Description: Optional — enables the ccloud ops sub-agent if set
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        DATABASE_URL: !Ref DatabaseUrl
+        AWS_REGION: !Ref BedrockRegion
+        ANAMNESIS_REPORT_BUCKET: !Ref ReportsBucket
+        COCKROACH_CLUSTER_ID: !Ref CockroachClusterId
+
+Resources:
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "anamnesis-reports-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ChatApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: app.lambda_handlers.api.handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: ["*"]
+          AllowMethods: ["*"]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+
+  ConsolidationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: app.lambda_handlers.consolidate.handler
+      Timeout: 60
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ReportsBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(30 minutes)
+            Description: Periodic memory consolidation + salience decay sweep
+
+  OpsAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: app.lambda_handlers.ops_agent.handler
+      Timeout: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Description: ccloud CLI self-observation of the memory cluster's own health
+
+Outputs:
+  ChatApiUrl:
+    Description: Public function URL for the chat API
+    Value: !GetAtt ChatApiFunctionUrl.FunctionUrl
+  ReportsBucketName:
+    Value: !Ref ReportsBucket

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+.aws-sam/
+node_modules/
+.DS_Store
+*.log
