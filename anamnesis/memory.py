@@ -5,7 +5,9 @@ detect_and_resolve_contradiction().
 
 Every write that changes what the agent believes happens inside a single
 CockroachDB SERIALIZABLE transaction alongside its audit row, so memory
-state and its audit trail can never diverge (see anamnesis.db.engine).
+state and its audit trail can never diverge, and the whole unit of work is
+retried from scratch on a serialization conflict or a lost connection
+(see anamnesis.db.engine.run_in_transaction).
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, text
 
 from anamnesis.agent.bedrock import BedrockClient, ChatMessage, get_client
-from anamnesis.db.engine import session_scope
+from anamnesis.db.engine import run_in_transaction, session_scope
 from anamnesis.db.models import EpisodicMemory, MemoryAudit, SemanticMemory
 
 DECAY_SALIENCE_THRESHOLD = 0.15
@@ -62,15 +64,17 @@ class Anamnesis:
     def remember(self, session_id: uuid.UUID, role: str, content: str) -> uuid.UUID:
         """Store a raw episodic event with its embedding. Audited."""
         embedding = self.llm.embed(content)
-        with session_scope() as db:
+
+        def _do(db):
             episode = EpisodicMemory(
                 session_id=session_id, role=role, content=content, embedding=embedding
             )
             db.add(episode)
             db.flush()
             db.add(MemoryAudit(action="WRITE", memory_id=episode.id, reason="episodic remember"))
-            episode_id = episode.id
-        return episode_id
+            return episode.id
+
+        return run_in_transaction(_do)
 
     # ----------------------------------------------------------------- read
 
@@ -179,7 +183,7 @@ class Anamnesis:
         """
         new_vec = self.llm.embed(new_belief_text)
 
-        with session_scope() as db:
+        def _do(db):
             candidates = db.execute(
                 text(
                     """
@@ -226,11 +230,12 @@ class Anamnesis:
 
             db.add(MemoryAudit(action="WRITE", memory_id=new_belief.id, reason="semantic belief recorded"))
 
-            result = Belief(
+            return Belief(
                 new_belief.id, new_belief.belief, new_belief.confidence,
                 new_belief.valid_from, new_belief.valid_to, new_belief.superseded_by,
             )
-        return result
+
+        return run_in_transaction(_do)
 
     def _llm_confirms_contradiction(self, old_belief: str, new_belief: str) -> bool:
         prompt = (
@@ -253,7 +258,7 @@ class Anamnesis:
         one transaction per cluster so a partial consolidation is never
         visible.
         """
-        with session_scope() as db:
+        def _do(db):
             query = select(EpisodicMemory).where(
                 EpisodicMemory.consolidated.is_(False),
                 EpisodicMemory.salience < DECAY_SALIENCE_THRESHOLD + 0.5,
@@ -301,13 +306,14 @@ class Anamnesis:
                     metadata_={"episode_ids": [str(e.id) for e in episodes]},
                 )
             )
-            belief_id = belief.id
+            return [belief.id]
 
-        return [belief_id]
+        return run_in_transaction(_do)
 
     def decay(self, rate: float = 0.05) -> int:
         """Age out episodic salience; audit the sweep. Returns rows touched."""
-        with session_scope() as db:
+
+        def _do(db):
             result = db.execute(
                 text(
                     """
@@ -320,7 +326,9 @@ class Anamnesis:
             )
             touched = result.rowcount
             db.add(MemoryAudit(action="DECAY", reason=f"salience -= {rate}", metadata_={"rows": touched}))
-        return touched
+            return touched
+
+        return run_in_transaction(_do)
 
 
 def _vec_literal(vec: list[float]) -> str:

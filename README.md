@@ -14,7 +14,7 @@ Anamnesis is a memory layer for AI agents with:
 - **Contradiction detection & self-correction** — new beliefs are checked against existing ones (vector similarity + LLM judgment); contradictions supersede the old belief instead of silently overwriting it, with a full `superseded_by` chain.
 - **Consolidation & forgetting** — an LLM-driven job folds low-salience episodic chatter into durable semantic beliefs and decays what's no longer relevant.
 - **Full auditability** — every memory write, supersede, consolidation, decay, and transaction retry is logged to an immutable `memory_audit` table, in the same transaction as the change it records.
-- **Survivability** — memory writes are wrapped in CockroachDB SERIALIZABLE transactions with automatic client-side retry on contention (SQLSTATE `40001`); a write either fully lands (episode + belief + audit together) or doesn't happen at all.
+- **Survivability** — memory writes are wrapped in CockroachDB SERIALIZABLE transactions with automatic client-side retry on both contention (SQLSTATE `40001`) and lost/killed connections mid-write (`connection_invalidated`); the whole unit of work — reads and writes — is redone from scratch on retry via `run_in_transaction()`, so a write either fully lands (episode + belief + audit together) or doesn't happen at all. Covered by a test that injects a simulated dropped connection and asserts the write survives.
 
 ## Why this is a database problem, not a vector-store problem
 
@@ -78,7 +78,7 @@ S3: consolidation reports + conversation exports
 2. **Contradiction** — "I'm vegetarian" → later "grab me chicken tikka" → the agent notices, asks, and supersedes the old belief. Watch the `superseded_by` chain appear live in the memory panel / via MCP.
 3. **Time-travel** — "what did you believe about my diet last week?" returns the old belief via its validity interval, not the current one.
 4. **Forgetting** — trigger consolidation live: low-salience episodic chatter folds into one semantic belief with provenance, audited.
-5. **Survivability** — kill the connection mid-write; the SERIALIZABLE transaction retries automatically and nothing is lost — visible as a `RETRY` row in the audit stream.
+5. **Survivability** — kill the connection mid-write (or watch the automated test that simulates it); the whole transaction is retried from scratch and nothing is lost — visible as a `RETRY` row in the audit stream.
 6. **Self-awareness** — ask the agent about the health of its own memory substrate; it answers using a ccloud CLI cluster inspection and remembers the answer.
 
 ## Quickstart (local, no cloud account required)

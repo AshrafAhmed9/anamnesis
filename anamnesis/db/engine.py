@@ -1,27 +1,48 @@
-"""CockroachDB connection engine with serialization-retry handling.
+"""CockroachDB connection engine with retry handling for two distinct
+transient-failure classes:
 
-CockroachDB uses SERIALIZABLE isolation for every transaction. Under
-contention this can surface as a retryable error (SQLSTATE 40001 /
-"restart transaction"). Memory writes in Anamnesis are transactional by
-design (an episodic insert + a belief supersede + an audit row happen
-together, or not at all) so we wrap every write in a retry loop rather
-than silently dropping data on a transient conflict.
+1. **Serialization conflicts** (SQLSTATE 40001 / "restart transaction") —
+   CockroachDB uses SERIALIZABLE isolation for every transaction, and under
+   contention the client is expected to retry the whole transaction.
+2. **Lost/killed connections** — a dropped connection mid-transaction
+   surfaces as a DBAPI-level error, not a SQLSTATE; SQLAlchemy marks these
+   with `connection_invalidated=True` regardless of driver, which is what
+   `pool_pre_ping` also relies on to evict dead connections from the pool.
+
+Memory writes in Anamnesis are transactional by design (an episodic insert
++ a belief supersede + an audit row happen together, or not at all), so
+both classes are retried rather than silently dropping data.
+
+`run_in_transaction(fn)` is the retry-guaranteed primitive: `fn(session)`
+is invoked with a *fresh* Session on every attempt, so both the reads and
+the writes it performs are correctly redone from scratch on each retry —
+this is CockroachDB's actual client-side retry contract. A plain
+`with session_scope() as db: ...` context manager cannot honor this: once
+its single `yield` has resumed the caller's `with`-block body, that body
+has already run and cannot be silently re-executed by the context manager
+if the later `commit()` fails, so `session_scope()` here is deliberately
+non-retrying and meant only for straightforward reads.
 """
 from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Callable, Iterator, TypeVar
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 _RETRYABLE_SQLSTATE = "40001"
+_MAX_ATTEMPTS = 5
+
+T = TypeVar("T")
 
 
-def _is_serialization_failure(exc: BaseException) -> bool:
+def _is_retryable(exc: BaseException) -> bool:
+    if getattr(exc, "connection_invalidated", False):
+        return True
     orig = getattr(exc, "orig", None)
     sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
     if sqlstate:
@@ -59,62 +80,69 @@ def get_engine() -> Engine:
     return _engine
 
 
-def retryable(fn):
-    """Decorator: retry a callable on CockroachDB SQLSTATE 40001 with backoff."""
-    return retry(
-        reraise=True,
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        retry=retry_if_exception(_is_serialization_failure),
-    )(fn)
+def run_in_transaction(fn: Callable[[Session], T], audit_retries: bool = True) -> T:
+    """Execute `fn(session)` as a single retryable unit of work.
 
-
-@contextmanager
-def session_scope(audit_retries: bool = True) -> Iterator[Session]:
-    """Yield a Session inside a retryable, atomic transaction block.
-
-    On SQLSTATE 40001 the whole block (including any prior statements
-    in this transaction) is retried from scratch, per CockroachDB's
-    client-side transaction retry contract.
+    On a serialization conflict or lost connection, `fn` is called again
+    from scratch with a brand-new Session — this is the primitive every
+    mutating operation in `anamnesis/memory.py` uses, so a belief write,
+    its contradiction check, and its audit row either all land together or
+    the whole thing is safely retried, never partially applied.
     """
     get_engine()
     assert _SessionFactory is not None
 
-    from tenacity import Retrying
-
     for attempt in Retrying(
         reraise=True,
-        stop=stop_after_attempt(5),
+        stop=stop_after_attempt(_MAX_ATTEMPTS),
         wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        retry=retry_if_exception(_is_serialization_failure),
+        retry=retry_if_exception(_is_retryable),
     ):
         with attempt:
             session = _SessionFactory()
             try:
-                yield session
+                result = fn(session)
                 session.commit()
-                return
+                return result
             except Exception as exc:
                 session.rollback()
-                if _is_serialization_failure(exc) and audit_retries:
-                    _log_retry(session, exc)
+                if _is_retryable(exc) and audit_retries:
+                    _log_retry(exc)
                 raise
             finally:
                 session.close()
 
+    raise AssertionError("unreachable: Retrying always raises or returns")
 
-def _log_retry(session: Session, exc: BaseException) -> None:
-    """Best-effort audit row for a serialization retry (own tiny transaction)."""
+
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Plain, non-retrying Session for read-only queries.
+
+    Reads have no side effects to lose on a transient failure, so they
+    don't need `run_in_transaction`'s redo-from-scratch guarantee — a
+    caller that needs a retried read can simply call again.
+    """
+    get_engine()
+    assert _SessionFactory is not None
+    session = _SessionFactory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def _log_retry(exc: BaseException) -> None:
+    """Best-effort audit row for a retry, in its own tiny transaction."""
     from anamnesis.db.models import MemoryAudit
 
     try:
         with _SessionFactory() as s:  # type: ignore[misc]
-            s.add(
-                MemoryAudit(
-                    action="RETRY",
-                    reason=str(exc)[:500],
-                )
-            )
+            s.add(MemoryAudit(action="RETRY", reason=str(exc)[:500]))
             s.commit()
     except Exception:
         pass
