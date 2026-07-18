@@ -93,7 +93,7 @@ make test         # full pytest suite, runs against the local cluster
 
 export ANAMNESIS_MOCK_LLM=1   # no AWS credentials needed for local dev
 make run          # FastAPI on :8000
-make ui           # static UI on :5173 (point ui/index.html's API_BASE at :8000)
+make ui           # static UI on :5173, then open http://localhost:5173?api=http://localhost:8000
 ```
 
 ## Deploying for real (CockroachDB Cloud + AWS Bedrock/Lambda/S3)
@@ -121,6 +121,7 @@ tests/               pytest suite (runs against a real local CockroachDB via Doc
 - **`ccloud` ops agent requires a container-image Lambda for AWS deployment** (the `ccloud` binary isn't pip-installable); documented in `infra/README.md` rather than shipped as a hidden gap.
 - **Salience decay/consolidation thresholds are simple constants**, not tuned on real usage data — flagged as a parameter to tune with production traffic, not a hardcoded assumption we're hiding.
 - **No production secrets management wired up** for the local Quickstart (`.env` file) — `infra/template.yaml` uses CloudFormation parameters with `NoEcho`; a real deployment should move `DATABASE_URL`/API keys to AWS Secrets Manager.
+- **CORS is wide open** (`allow_origins=["*"]`) so the demo UI can be hosted anywhere without a build step; a real deployment should pin this to the actual UI origin.
 
 ## License
 

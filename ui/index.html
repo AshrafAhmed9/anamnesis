@@ -53,7 +53,12 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback } = React;
 
-const API_BASE = window.ANAMNESIS_API_BASE || "http://localhost:8000";
+// Resolution order: ?api=<url> query param (for hosting this static file
+// against any deployed backend without a rebuild) > window.ANAMNESIS_API_BASE
+// (set via an inline <script> before this one) > localhost default for dev.
+const API_BASE = new URLSearchParams(window.location.search).get("api")
+  || window.ANAMNESIS_API_BASE
+  || "http://localhost:8000";
 
 function useApi(path, intervalMs) {
   const [data, setData] = useState(null);
