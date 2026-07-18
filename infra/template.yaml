@@ -21,6 +21,7 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.12
+    Architectures: [arm64]
     Timeout: 30
     MemorySize: 512
     Environment:
