@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime, timezone
 
 from anamnesis.agent.bedrock import ChatMessage, get_client
-from anamnesis.db.engine import session_scope
+from anamnesis.db.engine import run_in_transaction
 from anamnesis.db.models import OpsLog
 from anamnesis.memory import Anamnesis
 
@@ -58,9 +58,10 @@ def summarize_and_remember(facts: dict) -> str:
         ]
     ).strip()
 
-    with session_scope() as db:
+    def _do(db):
         db.add(OpsLog(source="ccloud", summary=summary, raw=facts))
 
+    run_in_transaction(_do)
     return summary
 
 
