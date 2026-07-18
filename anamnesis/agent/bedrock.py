@@ -83,7 +83,20 @@ def _mock_embedding(text: str) -> list[float]:
 
 
 def _mock_chat(messages: list[ChatMessage], system: str | None) -> str:
+    """Deterministic stand-in for local/offline dev and CI.
+
+    Recognizes the two structured judgment prompts used elsewhere in the
+    codebase (belief extraction, contradiction confirmation) and answers
+    them conservatively (NONE / NO) so mock mode doesn't spuriously
+    "discover" a belief or contradiction in every message — the mock has no
+    actual language understanding, so guessing YES would be misleading, not
+    just imprecise. All other prompts get a generic echo.
+    """
     last = messages[-1].content if messages else ""
+    if "respond with exactly: NONE" in last:
+        return "NONE"
+    if "Answer with exactly one word: YES or NO" in last:
+        return "NO"
     return f"[mock-llm] acknowledged: {last[:200]}"
 
 

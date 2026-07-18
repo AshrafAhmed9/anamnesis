@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -23,7 +23,7 @@ def test_contradiction_supersedes_old_belief(mem, session_id):
     first = mem.detect_and_resolve_contradiction("user is vegetarian", source_episode_ids=[])
     assert first.valid_to is None
 
-    second = mem.detect_and_resolve_contradiction(
+    mem.detect_and_resolve_contradiction(
         "user is vegetarian and does not eat meat, confirmed strongly", source_episode_ids=[]
     )
     # depending on mock LLM contradiction judgment this may or may not fire;
@@ -34,12 +34,18 @@ def test_contradiction_supersedes_old_belief(mem, session_id):
 
 
 def test_time_travel_returns_belief_valid_at_timestamp(mem, session_id):
+    # Buffers around the write guard against client/server clock-skew noise
+    # at the exact write instant (server timestamps `valid_from` on its own
+    # clock via `now()`); real usage compares against timestamps well
+    # outside this narrow window, so this doesn't mask a real bug.
     before = datetime.now(timezone.utc)
+    time.sleep(0.5)
     mem.detect_and_resolve_contradiction("user prefers tea over coffee", source_episode_ids=[])
-    after = datetime.now(timezone.utc) + timedelta(seconds=1)
+    time.sleep(0.5)
+    after = datetime.now(timezone.utc)
 
     beliefs_before = mem.beliefs_asof("beverage preference", before)
-    assert beliefs_before == [] or all(b.belief != "user prefers tea over coffee" for b in beliefs_before)
+    assert all(b.belief != "user prefers tea over coffee" for b in beliefs_before)
 
     beliefs_after = mem.beliefs_asof("beverage preference", after)
     assert any(b.belief == "user prefers tea over coffee" for b in beliefs_after)
