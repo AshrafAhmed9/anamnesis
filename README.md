@@ -23,13 +23,15 @@ Anamnesis is a memory layer for AI agents with:
 
 The demo agent is a **customer support agent** that remembers a specific
 customer across every ticket and session — not a generic "personal
-assistant." Concretely: a customer mentions they're on a Pro plan; three
-weeks later a different session references a billing question; the agent
-recalls the plan without being told again, and if the customer later says
-they downgraded, the agent catches the contradiction, updates its belief,
-and keeps a record of when the plan changed and why — the kind of thing a
-real support team needs (an accurate account history) and a plain
-vector-store chatbot cannot reliably do (see the benchmark below).
+assistant." Concretely (this is exactly what the UI's "Load demo data"
+button seeds): a customer mentions they're on the Free plan; later in the
+same history they mention upgrading to Pro. The agent catches the
+contradiction between the two, updates its belief to the current plan, and
+keeps a record of when the plan changed — so a later session can recall
+the current plan without being re-told, and can still correctly answer
+"what plan were they on before the upgrade" via time-travel. That's the
+kind of thing a real support team needs (an accurate account history) and
+a plain vector-store chatbot cannot reliably do (see the benchmark below).
 
 ## Why this is a database problem, not a vector-store problem
 
@@ -180,13 +182,15 @@ Covered by `tests/test_langchain_integration.py` (skips cleanly if `langchain-co
 anamnesis/          pip-installable memory library (remember/recall/beliefs_asof/consolidate)
   db/                SQLAlchemy models, CockroachDB engine + retry handling, schema.sql
   agent/             Bedrock client wrapper, demo agent loop
+  integrations/      LangChain AnamnesisChatMessageHistory
 app/                 FastAPI app + AWS Lambda handlers (chat API, consolidation, ops agent)
 migrations/          Alembic migrations
 infra/               AWS SAM template + deployment/RBAC/MCP docs
 ui/                  Chat + live memory panel (static, no build step)
 tests/               pytest suite (runs against a real local CockroachDB via Docker)
-scripts/             Quantified benchmark, scale test, node-kill survivability demo (see SUBMISSION.md)
-docs/                Architecture diagram, results from the scripts above, Devpost draft
+scripts/             Quantified benchmark, scale/concurrency/changefeed/node-kill demos (see SUBMISSION.md)
+docs/                Architecture diagram, results from the scripts above, Devpost/blog drafts
+.github/workflows/   CI: real CockroachDB + full test suite on every push/PR
 .claude-skills/      Agent Skills Repo usage notes + tool feedback
 ```
 
