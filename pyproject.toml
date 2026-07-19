@@ -38,3 +38,16 @@ include = ["anamnesis*"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.pytest.ini_options]
+# `app/` and `scripts/` are siblings of the `anamnesis` package, not part
+# of it (see [tool.setuptools.packages.find] above), so they're not on
+# sys.path via the package install itself. Locally this happened to work
+# anyway because this environment's `pip install -e .` used the older
+# .pth-based editable-install mechanism, which incidentally adds the whole
+# repo root to sys.path — but CI's fresh install used the newer PEP 660
+# import-hook editable install, which doesn't, and tests/test_api.py's
+# `from app.main import app` failed there with ModuleNotFoundError. This
+# makes the repo root explicit and portable instead of relying on that
+# incidental, install-mechanism-dependent behavior.
+pythonpath = ["."]

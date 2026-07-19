@@ -1,0 +1,63 @@
+info
+planning time: 3ms
+execution time: 37ms
+distribution: local
+vectorized: true
+plan type: generic, reused
+rows decoded from KV: 60 (249 KiB, 1 gRPC calls)
+cumulative time spent in KV: 7ms
+maximum memory usage: 320 KiB
+DistSQL network usage: 0 B (0 messages)
+sql cpu time: 20ms
+isolation level: serializable
+priority: normal
+quality of service: regular
+
+• top-k
+│ sql nodes: n1
+│ actual row count: 5
+│ execution time: 84µs
+│ estimated max memory allocated: 10 KiB
+│ sql cpu time: 84µs
+│ estimated row count: 5
+│ order: +column13
+│ k: 5
+│
+└── • render
+"    │"
+"    └── • lookup join"
+"        │ sql nodes: n1"
+"        │ kv nodes: n1"
+"        │ actual row count: 60"
+"        │ KV time: 7ms"
+"        │ KV rows decoded: 60"
+"        │ KV bytes read: 249 KiB"
+"        │ KV gRPC calls: 1"
+"        │ execution time: 9ms"
+"        │ estimated max memory allocated: 30 KiB"
+"        │ sql cpu time: 4ms"
+"        │ table: episodic_memory@episodic_memory_pkey"
+"        │ equality: (id) = (id)"
+"        │ equality cols are key"
+"        │"
+"        └── • vector search"
+"              sql nodes: n1"
+"              actual row count: 60"
+"              execution time: 27ms"
+"              sql cpu time: 16ms"
+"              table: episodic_memory@episodic_embedding_idx"
+"              target count: 5"
+
+---
+Context: run against the 20,000-row episodic_memory table from
+scripts/scale_test.py's scale run. The key line proving the vector index
+is actually used (not a full table scan disguised as fast):
+
+    └── • vector search
+          table: episodic_memory@episodic_embedding_idx
+          target count: 5
+
+This is CockroachDB's C-SPANN operator reading the CREATE VECTOR INDEX
+directly, distinct from a sequential/full scan plan node. The subsequent
+"lookup join" fetches full row content for the candidate IDs the vector
+search returned — a normal, expected two-step ANN-then-hydrate plan.
