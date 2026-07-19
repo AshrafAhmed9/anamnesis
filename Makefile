@@ -12,6 +12,7 @@ migrate:
 	DATABASE_URL=$${DATABASE_URL:-cockroachdb+psycopg://root@localhost:26257/anamnesis?sslmode=disable} alembic upgrade head
 
 test:
+	docker exec anamnesis-crdb ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_test;"
 	ANAMNESIS_MOCK_LLM=1 \
 	DATABASE_URL=$${TEST_DATABASE_URL:-cockroachdb+psycopg://root@localhost:26257/anamnesis_test?sslmode=disable} \
 	pytest tests/ -v
