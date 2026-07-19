@@ -1,0 +1,45 @@
+# Local 3-node CockroachDB cluster with REAL --locality flags, simulating
+# a multi-region deployment (us-east / us-west / eu-west) for locality-
+# aware features — distinct from infra/docker-compose.multinode.yml, which
+# is 3 nodes with no locality tags at all, used for the node-kill and
+# network-partition demos.
+#
+# Honest scope: this is still 3 containers on one Docker host, so it
+# cannot demonstrate real cross-region network latency — Docker doesn't
+# add WAN-like delay between containers on the same bridge network. What
+# it DOES demonstrate for real: CockroachDB actually recognizing and
+# reporting distinct node localities (`SHOW LOCALITY`, node status), which
+# is the real prerequisite for locality-aware features (`REGIONAL BY
+# ROW`, locality-optimized search, survival goals) — separate from
+# whatever a production deployment's actual network topology would add.
+#
+# Usage: docker compose -f infra/docker-compose.multiregion.yml up -d
+#        docker compose -f infra/docker-compose.multiregion.yml exec crdb-us-east \
+#          ./cockroach init --insecure
+version: "3.8"
+
+networks:
+  default:
+    name: anamnesis-multiregion
+
+services:
+  crdb-us-east:
+    image: cockroachdb/cockroach:latest-v25.2
+    command: start --insecure --locality=region=us-east,zone=us-east-1a --join=crdb-us-east,crdb-us-west,crdb-eu-west --http-addr=0.0.0.0:8080
+    ports:
+      - "26261:26257"
+      - "8094:8080"
+
+  crdb-us-west:
+    image: cockroachdb/cockroach:latest-v25.2
+    command: start --insecure --locality=region=us-west,zone=us-west-1a --join=crdb-us-east,crdb-us-west,crdb-eu-west --http-addr=0.0.0.0:8080
+    ports:
+      - "26262:26257"
+      - "8095:8080"
+
+  crdb-eu-west:
+    image: cockroachdb/cockroach:latest-v25.2
+    command: start --insecure --locality=region=eu-west,zone=eu-west-1a --join=crdb-us-east,crdb-us-west,crdb-eu-west --http-addr=0.0.0.0:8080
+    ports:
+      - "26263:26257"
+      - "8096:8080"

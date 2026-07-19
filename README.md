@@ -115,6 +115,17 @@ identifying and killing the exact container the connection is really
 using, not a guess — and shows **30/30 writes still landed** (one paid a
 ~3.1s failover cost). [`docs/results/node_kill_demo_output.txt`](docs/results/node_kill_demo_output.txt), reproduce with `scripts/node_kill_demo.py` (setup: `infra/docker-compose.multinode.yml`).
 
+**A harder failure mode, reported honestly**: `scripts/network_partition_demo.py`
+uses `docker network disconnect` instead of `docker kill` — the node keeps
+running but goes silent, closer to a real network segmentation event. 19/20
+writes survived; the one caught mid-partition hit a 20s bound, likely gated
+by CockroachDB's own server-side lease-transfer rather than anything
+client-side. [`docs/results/network_partition_demo_output.txt`](docs/results/network_partition_demo_output.txt).
+
+**Real multi-region locality**: 3 nodes with genuine `--locality=region=...`
+flags (not simulated) — killing the region actually serving the connection,
+**25/25 writes survived**. [`docs/results/region_kill_demo_output.txt`](docs/results/region_kill_demo_output.txt), reproduce with `make multiregion-up && make region-kill-demo`.
+
 ## The 6 demo moments
 
 1. **Persistence with provenance** — talk to the agent, restart everything, come back later — it remembers, citing when it learned each fact.

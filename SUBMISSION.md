@@ -115,6 +115,20 @@ Quality engineering, correct and safe tool usage.
   Every other write, including all 13 issued after the partition healed,
   succeeded immediately, and no data was lost or corrupted.
   [`docs/results/network_partition_demo_output.txt`](docs/results/network_partition_demo_output.txt).
+- **Real multi-region locality, not simulated**: `infra/docker-compose.multiregion.yml`
+  runs 3 nodes with genuine `--locality=region=...` flags (us-east/us-west/eu-west),
+  verified that CockroachDB actually recognizes and reports the distinct
+  localities, not just container names. `scripts/region_kill_demo.py`
+  kills the specific region actually serving the connection (resolved by
+  locality, not guessed) — **25/25 writes survived** losing an entire
+  region. Building this caught a real CSV-parsing bug shared across three
+  scripts: `locality` values contain embedded commas
+  (`region=us-east,zone=us-east-1a`), which a naive `str.split(",")`
+  breaks on but `csv.reader` handles correctly — fixed in all three
+  node-resolution scripts, not just the one that surfaced it. Honest
+  scope: 3 containers on one Docker host can't simulate real cross-region
+  network latency, stated plainly rather than implied.
+  [`docs/results/region_kill_demo_output.txt`](docs/results/region_kill_demo_output.txt).
 - **All 4 CockroachDB tools used correctly, not just switched on** — see
   the table in `README.md`'s "CockroachDB tools used" section and
   `.claude-skills/README.md` for two skills concretely applied (one
@@ -227,4 +241,8 @@ make node-kill-demo
 
 # Network partition (harder failure mode, honest result — see write-up above)
 make network-partition-demo
+
+# Real multi-region locality + region-kill (3 distinct regions)
+make multiregion-up
+make region-kill-demo
 ```

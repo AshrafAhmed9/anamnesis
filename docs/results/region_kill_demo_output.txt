@@ -1,0 +1,6 @@
+Region-kill demo: region='us-east' (anamnesis-multiregion-crdb-us-east-1) killed mid-write-loop
+
+25/25 writes succeeded.
+Every write landed despite losing the 'us-east' region entirely — the client failed over to the surviving regions (verified: 'us-east', 'us-west', 'eu-west' are real, distinct localities CockroachDB reports, not just container names).
+
+Scope note: 3 containers on one Docker host cannot simulate real cross-region network latency — this demonstrates the failover/retry mechanics with genuine CockroachDB locality awareness, not WAN-scale timing.

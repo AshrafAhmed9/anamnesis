@@ -1,4 +1,4 @@
-.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down concurrency-test mvcc-demo changefeed-demo network-partition-demo
+.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down concurrency-test mvcc-demo changefeed-demo network-partition-demo multiregion-up region-kill-demo multiregion-down
 
 dev-db:
 	docker rm -f anamnesis-crdb 2>/dev/null || true
@@ -53,6 +53,22 @@ node-kill-demo:
 
 network-partition-demo:
 	python3 scripts/network_partition_demo.py
+
+multiregion-up:
+	docker compose -p anamnesis-multiregion -f infra/docker-compose.multiregion.yml up -d
+	sleep 5
+	docker exec anamnesis-multiregion-crdb-us-east-1 ./cockroach init --insecure || true
+	sleep 3
+	docker exec anamnesis-multiregion-crdb-us-east-1 ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_region;"
+	docker exec anamnesis-multiregion-crdb-us-east-1 ./cockroach sql --insecure -e "SET CLUSTER SETTING feature.vector_index.enabled = true;"
+	DATABASE_URL=cockroachdb+psycopg://root@localhost:26261/anamnesis_region?sslmode=disable \
+		alembic upgrade head
+
+region-kill-demo:
+	python3 scripts/region_kill_demo.py
+
+multiregion-down:
+	docker compose -p anamnesis-multiregion -f infra/docker-compose.multiregion.yml down
 
 multinode-down:
 	docker compose -f infra/docker-compose.multinode.yml down

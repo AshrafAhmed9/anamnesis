@@ -26,6 +26,8 @@ Usage:
 """
 from __future__ import annotations
 
+import csv
+import io
 import os
 import subprocess
 import sys
@@ -66,8 +68,15 @@ def resolve_container_for_current_connection() -> str:
         ["docker", "exec", INIT_CONTAINER, "./cockroach", "node", "status", "--insecure", "--format=csv"],
         check=True, capture_output=True, text=True,
     ).stdout
-    lines = [ln.split(",") for ln in status.strip().splitlines()]
-    header, rows = lines[0], lines[1:]
+    # csv.reader, not str.split(","): the `locality` column's value can
+    # itself contain commas (e.g. "region=us-east,zone=us-east-1a") and is
+    # correctly CSV-quoted by `cockroach node status --format=csv` when it
+    # does — a naive split breaks in that case (caught for real while
+    # building scripts/region_kill_demo.py, which runs on a cluster with
+    # non-empty locality; this cluster's locality is empty so the bug was
+    # latent here, not yet triggered).
+    rows_parsed = list(csv.reader(io.StringIO(status)))
+    header, rows = rows_parsed[0], rows_parsed[1:]
     addr_idx = header.index("address")
     id_idx = header.index("id")
     target_hostname = next(row[addr_idx].split(":")[0] for row in rows if row[id_idx] == str(node_id))
