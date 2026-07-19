@@ -13,13 +13,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import text
+from sqlalchemy import Column, DateTime, String, text
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from anamnesis.agent.bedrock import BedrockClient
 from anamnesis.db.engine import run_in_transaction, session_scope
 from anamnesis.db.models import Base
-from sqlalchemy import Column, DateTime, String
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from anamnesis.db.vector_type import Vector
 
 EMBEDDING_DIM = 1024

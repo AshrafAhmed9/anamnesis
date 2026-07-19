@@ -1,5 +1,5 @@
 Anamnesis vs naive vector-store-only memory — 12 contradiction scenarios
-Run at: 2026-07-18T18:52:16.145996+00:00
+Run at: 2026-07-19T12:25:03.816380+00:00
 
 Metric                                          Anamnesis    Naive vector store
 -------------------------------------------------------------------------------
