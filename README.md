@@ -1,5 +1,7 @@
 # 🪳 Anamnesis — Agentic Memory as a Distributed SQL Problem
 
+[![CI](https://github.com/AshrafAhmed9/anamnesis/actions/workflows/ci.yml/badge.svg)](https://github.com/AshrafAhmed9/anamnesis/actions/workflows/ci.yml)
+
 **Built for the [CockroachDB × AWS Hackathon](https://cockroachdb-ai.devpost.com) — Build with Agentic Memory.**
 **→ [SUBMISSION.md](SUBMISSION.md) maps every judging criterion to exact evidence in this repo.**
 
@@ -163,6 +165,11 @@ docs/                Architecture diagram, results from the scripts above, Devpo
 - **Salience decay/consolidation thresholds are simple constants**, not tuned on real usage data — flagged as a parameter to tune with production traffic, not a hardcoded assumption we're hiding.
 - **No production secrets management wired up** for the local Quickstart (`.env` file) — `infra/template.yaml` uses CloudFormation parameters with `NoEcho`; a real deployment should move `DATABASE_URL`/API keys to AWS Secrets Manager.
 - **CORS is wide open** (`allow_origins=["*"]`) so the demo UI can be hosted anywhere without a build step; a real deployment should pin this to the actual UI origin.
+- **"At most one active belief per topic" is not a hard guarantee under N simultaneous first-time writers** on a topic that has never been asserted before (a phantom-insert/write-skew case — `FOR UPDATE` row locking can only serialize writers contending over a belief that already exists, verified and fixed for that case; there's nothing to lock for a genuinely brand-new topic). Not a data-loss risk — every write is durably and correctly stored either way — and not the shape of real usage (one agent, one conversation at a time), but a real, understood boundary rather than a claimed-and-untested guarantee. See `scripts/concurrency_test.py` for both the fix and the honest edge case, reproducible on demand.
+
+## Development notes
+
+This project was built during the hackathon's submission period with AI-assisted development (Claude Code). All source code, tests, and infrastructure in this repository were authored for this submission — no pre-existing code was incorporated beyond the standard open-source dependencies declared in `pyproject.toml`/`requirements.txt`.
 
 ## License
 
