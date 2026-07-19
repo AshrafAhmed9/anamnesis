@@ -29,6 +29,9 @@ dev = [
 bench = [
     "sentence-transformers>=2.7",
 ]
+langchain = [
+    "langchain-core>=0.3",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

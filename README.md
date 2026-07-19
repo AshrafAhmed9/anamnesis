@@ -157,6 +157,23 @@ mem.remember(session_id, "user", "I prefer email over phone calls")
 
 Not yet published to PyPI (that's a maintainer action requiring a PyPI account, not something built into CI) — `python3 -m build && twine upload dist/*` from the repo root does it.
 
+### LangChain integration
+
+`anamnesis.integrations.langchain.AnamnesisChatMessageHistory` implements LangChain's current `BaseChatMessageHistory` (not the older, now-removed `BaseMemory`/`ConversationBufferMemory` — verified against `langchain-core` 1.4.9 while building this). Every message is a real `Anamnesis.remember()` write, so a LangChain-orchestrated agent's history goes through the same transactional, audited memory as the rest of this project, not a separate lightweight store:
+
+```bash
+pip install "anamnesis-crdb[langchain]"
+```
+
+```python
+from anamnesis.integrations.langchain import AnamnesisChatMessageHistory
+
+history = AnamnesisChatMessageHistory(session_id=my_session_id)
+history.add_user_message("I prefer email over phone calls")
+```
+
+Covered by `tests/test_langchain_integration.py` (skips cleanly if `langchain-core` isn't installed — it's an optional integration, not a hard dependency).
+
 ## Repository layout
 
 ```
