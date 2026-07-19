@@ -82,6 +82,17 @@ Quality engineering, correct and safe tool usage.
     created — the kind of thing that silently works on a dev machine with
     leftover state and breaks for anyone starting clean (i.e. every
     judge). Fixed and re-verified from a truly clean database.
+  - `app/lambda_handlers/ops_agent.py` called `ccloud cluster describe`
+    and `ccloud backup list --cluster <id>` — neither is a real `ccloud`
+    subcommand. This was undetected because it had never been run against
+    an authenticated `ccloud` session before. Once `ccloud auth` was
+    available, ran it for real: found the error, checked `ccloud cluster
+    --help`/`ccloud cluster backup --help` for the actual subcommands
+    (`cluster info`, `cluster backup list`), fixed it, and confirmed a
+    full real run — real cluster metadata and a real backup record
+    fetched, summarized, and written to both `ops_log` and the agent's
+    own `episodic_memory` on the live cluster.
+    [`docs/results/ops_agent_output.txt`](docs/results/ops_agent_output.txt).
 - **Real database-level survivability, not just app-level retry**:
   `scripts/node_kill_demo.py` runs against a real 3-node local
   CockroachDB cluster, identifies which node the live connection is

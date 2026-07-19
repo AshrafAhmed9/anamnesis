@@ -1,0 +1,30 @@
+ccloud ops sub-agent — real end-to-end run against the live CockroachDB Cloud cluster
+Run at: 2026-07-19T12:41:54Z
+Cluster: doting-serval (56b9fced-c64d-4740-b5d3-9209e3dfb7ec), ap-south-1
+
+Command: python3 -m app.lambda_handlers.ops_agent
+
+This run exposed and fixed a real bug: the original implementation called
+`ccloud cluster describe` and `ccloud backup list --cluster <id>`, neither
+of which exist as ccloud subcommands (verified via `ccloud cluster --help`
+and `ccloud cluster backup --help` against the real, authenticated CLI).
+The correct subcommands are `ccloud cluster info <id>` and
+`ccloud cluster backup list <id>`. This had never been run against a real
+authenticated ccloud session before this point in the project, so the bug
+was silent until now.
+
+After the fix, verified real end-to-end:
+  - `ccloud cluster info` returned real cluster metadata (cloud_provider,
+    cockroach_version, plan, region, state, etc.)
+  - `ccloud cluster backup list` returned a real backup record
+    (as_of_time, id)
+  - Both were summarized (mock LLM for this run; real Bedrock in
+    production) and written to:
+      - ops_log (source='ccloud', summary, raw JSON facts)
+      - episodic_memory, as a "[self-observation @ ...]" entry in the
+        agent's own memory — the ops sub-agent's finding about its own
+        infrastructure becomes part of the same memory the chat agent
+        reads from.
+
+Both writes confirmed present in the live database via direct query
+after the run.

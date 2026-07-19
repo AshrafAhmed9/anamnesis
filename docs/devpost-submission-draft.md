@@ -64,10 +64,12 @@ truth — which is what CockroachDB is for.
   agent itself) can query `semantic_memory`/`memory_audit` directly via any
   MCP client, no code required.
 - **ccloud CLI (agent-ready)** — a scheduled sub-agent runs
-  `ccloud cluster describe` / `ccloud backup list` against the cluster
+  `ccloud cluster info` / `ccloud cluster backup list` against the cluster
   hosting its own memory, summarizes cluster health with the LLM, and
   writes the observation back into its own memory. Uses a dedicated
-  read-only RBAC service account, never the org admin key.
+  least-privilege (`CLUSTER_DEVELOPER`) RBAC service account, never the
+  org admin key. Verified with a real end-to-end run against the live
+  cluster.
 - **Agent Skills Repo** — installed the real, open-source
   `cockroachlabs/cockroachdb-skills` and concretely applied two skills
   during development: `designing-application-transactions` caught a real

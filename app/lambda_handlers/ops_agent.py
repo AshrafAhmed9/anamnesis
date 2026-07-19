@@ -1,9 +1,17 @@
 """ccloud CLI ops sub-agent: the memory layer watches its own health.
 
-Runs `ccloud cluster describe` / `ccloud backup list` (JSON output) against
-the cluster hosting Anamnesis's own memory, summarizes the result with the
-LLM, and writes the finding into ops_log — and, if noteworthy, into the
-agent's own semantic memory ("I noticed X about my own substrate").
+Runs `ccloud cluster info` / `ccloud cluster backup list` (JSON output)
+against the cluster hosting Anamnesis's own memory, summarizes the result
+with the LLM, and writes the finding into ops_log — and, if noteworthy,
+into the agent's own semantic memory ("I noticed X about my own
+substrate").
+
+The command names above are verified against the real `ccloud` CLI
+(`ccloud auth whoami`, then running both commands against a live
+cluster), not guessed from the CLI's general "noun-verb" pattern — the
+first version of this file used `ccloud cluster describe` and `ccloud
+backup list --cluster <id>`, neither of which exist; the real subcommands
+are `cluster info` and `cluster backup list <id>`.
 
 Requires a ccloud service account with read-only RBAC scoped to this
 cluster (see infra/README.md). Runs as a scheduled Lambda alongside the
@@ -37,8 +45,8 @@ def _run_ccloud(*args: str) -> dict:
 
 def gather_cluster_facts(cluster_id: str) -> dict:
     return {
-        "cluster": _run_ccloud("cluster", "describe", cluster_id),
-        "backups": _run_ccloud("backup", "list", "--cluster", cluster_id),
+        "cluster": _run_ccloud("cluster", "info", cluster_id),
+        "backups": _run_ccloud("cluster", "backup", "list", cluster_id),
     }
 
 

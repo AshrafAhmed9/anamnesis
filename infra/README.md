@@ -31,20 +31,34 @@ The `OpsAgentFunction` shells out to the `ccloud` binary, which is not a Python 
 
 ### RBAC service account
 
-Create a **read-only, cluster-scoped** service account for the ops agent so it can never write to or drop the memory cluster it's monitoring:
+Create a **least-privilege, cluster-scoped** service account for the ops
+agent so it can never modify or drop the memory cluster it's monitoring.
+The commands and role name below are verified against a real,
+authenticated `ccloud` session and a real cluster — not guessed from the
+CLI's general noun-verb pattern. (The first draft of this doc had three
+commands wrong: `ccloud role-binding create` doesn't exist, `ccloud
+service-account api-key create` takes the service account's *ID* plus a
+key name, not just its name, and `CLUSTER_OPERATOR_VIEWER` isn't a real
+role — the actual full role list, from the CLI's own validation error, is
+`BILLING_COORDINATOR ORG_ADMIN ORG_MEMBER CLUSTER_ADMIN
+CLUSTER_OPERATOR_WRITER CLUSTER_DEVELOPER CLUSTER_CREATOR FOLDER_ADMIN
+FOLDER_MOVER`; `CLUSTER_DEVELOPER` is the closest fit for read/connect
+access without operator-level write privileges on the cluster.)
 
 ```bash
+# 1. Create the service account, capture its id from the output
 ccloud service-account create anamnesis-ops-agent \
-  --description "read-only cluster + backup introspection for Anamnesis"
-ccloud service-account api-key create anamnesis-ops-agent
-ccloud role-binding create \
-  --service-account anamnesis-ops-agent \
-  --role CLUSTER_OPERATOR_VIEWER \
-  --resource-type cluster \
-  --resource-id <your-cluster-id>
+  --description "read-only cluster + backup introspection for Anamnesis" -o json
+# -> note the "id" field, e.g. 6ab77cfc-0888-4f9b-ae80-bba2c201e2bf
+
+# 2. Grant it CLUSTER_DEVELOPER scoped to just this cluster (not org-wide)
+ccloud role add <service-account-id> CLUSTER_DEVELOPER CLUSTER <your-cluster-id>
+
+# 3. Create an API key — the secret is shown exactly once, save it immediately
+ccloud service-account api-key create <service-account-id> ops-agent-key -o json
 ```
 
-Store the resulting API key in AWS Secrets Manager, never the org admin key. **Known gap**: we have not verified `ccloud`'s exact non-interactive/service-account authentication mechanism for unattended use in a Lambda container (its interactive `ccloud auth login` opens a browser, which obviously doesn't work inside Lambda) — confirm the current mechanism against the `ccloud` reference docs before wiring the container-image Lambda described below. For the hackathon demo itself, the ops agent runs from a local machine with `ccloud auth login` already completed interactively (see the video).
+Store the resulting API key in AWS Secrets Manager, never the org admin key. **Known gap**: we have not verified `ccloud`'s exact non-interactive/service-account authentication mechanism for unattended use in a Lambda container (its interactive `ccloud auth login` opens a browser, which obviously doesn't work inside Lambda) — confirm the current mechanism against the `ccloud` reference docs before wiring the container-image Lambda described below. For the hackathon demo itself, the ops agent runs from a local machine with `ccloud auth login` already completed interactively, and this exact service-account/role/API-key flow above has been run for real against the live cluster (see `docs/results/ops_agent_output.txt`).
 
 ## CockroachDB Managed MCP Server — judge's guide
 
