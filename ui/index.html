@@ -80,6 +80,7 @@ function ChatPanel({ onMemoryChange }) {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(null);
   const [sending, setSending] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const logRef = useRef(null);
 
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [messages]);
@@ -107,12 +108,34 @@ function ChatPanel({ onMemoryChange }) {
     }
   };
 
+  const loadDemoData = async () => {
+    setSeeding(true);
+    try {
+      const resp = await fetch(API_BASE + "/demo/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const body = await resp.json();
+      setSessionId(body.session_id);
+      setMessages(m => [...m, { role: "agent", text: `Loaded a sample customer-support history (${body.seeded_turns} turns) — check the memory panel for the contradiction it caught.` }]);
+      onMemoryChange();
+    } catch (e) {
+      setMessages(m => [...m, { role: "agent", text: "(error seeding demo data — is the API running?)" }]);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="panel">
       <h2>Chat</h2>
       <div className="chat-log" ref={logRef}>
-        {messages.length === 0 && <div className="empty">Say something — try telling it a preference, then contradict it later.</div>}
+        {messages.length === 0 && <div className="empty">Say something — try telling it a preference, then contradict it later — or click "Load demo data" below.</div>}
         {messages.map((m, i) => <div key={i} className={"msg " + m.role}>{m.text}</div>)}
+      </div>
+      <div className="toolbar">
+        <button onClick={loadDemoData} disabled={seeding}>{seeding ? "Loading..." : "Load demo data"}</button>
       </div>
       <div className="chat-input">
         <input value={input} onChange={e => setInput(e.target.value)}
