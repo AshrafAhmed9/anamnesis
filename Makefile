@@ -1,4 +1,4 @@
-.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down
+.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down concurrency-test mvcc-demo changefeed-demo
 
 dev-db:
 	docker rm -f anamnesis-crdb 2>/dev/null || true
@@ -53,3 +53,14 @@ node-kill-demo:
 
 multinode-down:
 	docker compose -f infra/docker-compose.multinode.yml down
+
+concurrency-test:
+	docker exec anamnesis-crdb ./cockroach sql --insecure -e "CREATE DATABASE IF NOT EXISTS anamnesis_concurrency;"
+	python3 scripts/concurrency_test.py --workers 10 --topic-count 3
+
+mvcc-demo:
+	python3 scripts/mvcc_timetravel_demo.py
+
+changefeed-demo:
+	docker exec anamnesis-crdb ./cockroach sql --insecure -e "SET CLUSTER SETTING kv.rangefeed.enabled = true;"
+	python3 scripts/changefeed_demo.py

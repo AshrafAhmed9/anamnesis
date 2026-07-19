@@ -1,0 +1,6 @@
+CDC changefeed demo: memory_audit events streamed live via CHANGEFEED
+
+Run at: 2026-07-19T12:13:35.987534+00:00
+
+PASS: received a live changefeed event for the triggered write within the deadline.
+Event: action=WRITE, reason=episodic remember, at=2026-07-19T12:13:35.557508Z
