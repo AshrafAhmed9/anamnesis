@@ -78,34 +78,82 @@ class Anamnesis:
 
     # ----------------------------------------------------------------- read
 
-    def recall(self, query: str, k: int = 5) -> tuple[list[RecalledEpisode], list[Belief]]:
-        """Vector-similarity recall of recent episodes + currently-held beliefs."""
-        query_vec = self.llm.embed(query)
-        with session_scope() as db:
-            episodes = db.execute(
-                text(
-                    """
-                    SELECT id, content, role, created_at, session_id
-                    FROM episodic_memory
-                    ORDER BY embedding <-> :qv
-                    LIMIT :k
-                    """
-                ),
-                {"qv": _vec_literal(query_vec), "k": k},
-            ).fetchall()
+    def recall(
+        self, query: str, k: int = 5, stale_ok: bool = False
+    ) -> tuple[list[RecalledEpisode], list[Belief]]:
+        """Vector-similarity recall of recent episodes + currently-held beliefs.
 
-            beliefs = db.execute(
-                text(
-                    """
-                    SELECT id, belief, confidence, valid_from, valid_to, superseded_by
-                    FROM semantic_memory
-                    WHERE valid_to IS NULL
-                    ORDER BY embedding <-> :qv
-                    LIMIT :k
-                    """
-                ),
-                {"qv": _vec_literal(query_vec), "k": k},
-            ).fetchall()
+        `stale_ok=True` uses CockroachDB follower reads
+        (`AS OF SYSTEM TIME follower_read_timestamp()`, ~4.8s stale by
+        default): the query is served by the nearest replica instead of
+        requiring a round trip to the range's leaseholder, trading a few
+        seconds of staleness for lower latency and less leaseholder load.
+        Reasonable default for conversational recall, where "what did we
+        talk about" doesn't need sub-second freshness; leave False for
+        anything that must reflect a write from the last few seconds.
+        """
+        query_vec = self.llm.embed(query)
+
+        if stale_ok:
+            # AS OF SYSTEM TIME needs its own AUTOCOMMIT connection, not
+            # the shared ORM session — see the identical fix and its
+            # docstring on recall_as_of_system_time() below for why (a
+            # pooled connection's pre-ping statement otherwise pins an
+            # implicit transaction timestamp that conflicts with this).
+            from anamnesis.db.engine import get_engine
+
+            conn = get_engine().connect().execution_options(isolation_level="AUTOCOMMIT")
+            try:
+                episodes = conn.execute(
+                    text(
+                        """
+                        SELECT id, content, role, created_at, session_id
+                        FROM episodic_memory AS OF SYSTEM TIME follower_read_timestamp()
+                        ORDER BY embedding <-> :qv
+                        LIMIT :k
+                        """
+                    ),
+                    {"qv": _vec_literal(query_vec), "k": k},
+                ).fetchall()
+                beliefs = conn.execute(
+                    text(
+                        """
+                        SELECT id, belief, confidence, valid_from, valid_to, superseded_by
+                        FROM semantic_memory AS OF SYSTEM TIME follower_read_timestamp()
+                        WHERE valid_to IS NULL
+                        ORDER BY embedding <-> :qv
+                        LIMIT :k
+                        """
+                    ),
+                    {"qv": _vec_literal(query_vec), "k": k},
+                ).fetchall()
+            finally:
+                conn.invalidate()
+        else:
+            with session_scope() as db:
+                episodes = db.execute(
+                    text(
+                        """
+                        SELECT id, content, role, created_at, session_id
+                        FROM episodic_memory
+                        ORDER BY embedding <-> :qv
+                        LIMIT :k
+                        """
+                    ),
+                    {"qv": _vec_literal(query_vec), "k": k},
+                ).fetchall()
+                beliefs = db.execute(
+                    text(
+                        """
+                        SELECT id, belief, confidence, valid_from, valid_to, superseded_by
+                        FROM semantic_memory
+                        WHERE valid_to IS NULL
+                        ORDER BY embedding <-> :qv
+                        LIMIT :k
+                        """
+                    ),
+                    {"qv": _vec_literal(query_vec), "k": k},
+                ).fetchall()
 
         return (
             [RecalledEpisode(*row) for row in episodes],
@@ -148,15 +196,29 @@ class Anamnesis:
 
         Uses a fresh, dedicated connection (not the pooled session used
         elsewhere) because CockroachDB pins a transaction's read timestamp
-        for its lifetime once `AS OF SYSTEM TIME` is used, and reusing a
-        pooled connection across different `AS OF SYSTEM TIME` values in
-        different transactions can otherwise conflict on some drivers.
+        for its lifetime once `AS OF SYSTEM TIME` is used. The connection
+        is explicitly invalidated after use (not just closed) so the pool
+        never hands a later caller a connection carrying residual
+        AS OF SYSTEM TIME state from a *different* timestamp — verified
+        empirically: without this, a second call at a different `as_of`
+        raised `FeatureNotSupported: inconsistent AS OF SYSTEM TIME
+        timestamp` on the reused pooled connection.
         """
         from anamnesis.db.engine import get_engine
 
         asof_literal = as_of.astimezone(timezone.utc).isoformat()
         engine = get_engine()
-        with engine.connect() as conn:
+        # AUTOCOMMIT: with the default transactional isolation level,
+        # SQLAlchemy/psycopg's pool_pre_ping issues its own lightweight
+        # statement on checkout, which — verified empirically — pins an
+        # implicit transaction timestamp that then conflicts with our
+        # explicit historical AS OF SYSTEM TIME on the very next
+        # statement ("inconsistent AS OF SYSTEM TIME timestamp"), even on
+        # a freshly checked-out connection. AUTOCOMMIT makes every
+        # statement, including the pre-ping, its own independent
+        # single-statement transaction, which avoids that.
+        conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+        try:
             rows = conn.execute(
                 text(
                     f"""
@@ -168,6 +230,8 @@ class Anamnesis:
                 ),
                 {"k": k},
             ).fetchall()
+        finally:
+            conn.invalidate()
         return [Belief(*row) for row in rows]
 
     # ------------------------------------------------------ contradictions
@@ -206,14 +270,14 @@ class Anamnesis:
                 {"qv": _vec_literal(new_vec)},
             ).fetchall()
 
-        contradicted_id: uuid.UUID | None = None
+        is_contradiction = False
         for row in candidates:
             existing_embedding = _parse_vec_literal(row.embedding)
             dist = _cosine_distance(new_vec, existing_embedding)
             if dist < CONTRADICTION_SIM_THRESHOLD and self._llm_confirms_contradiction(
                 row.belief, new_belief_text
             ):
-                contradicted_id = row.id
+                is_contradiction = True
                 break
 
         def _do(db):
@@ -226,22 +290,51 @@ class Anamnesis:
             db.add(new_belief)
             db.flush()
 
-            if contradicted_id is not None:
-                # Re-fetch inside the transaction rather than trusting the
-                # pre-read candidate, and re-check it's still active — it
-                # may have been superseded by something else between our
-                # read above and this write.
-                old = db.get(SemanticMemory, contradicted_id)
-                if old is not None and old.valid_to is None:
-                    old.valid_to = datetime.now(timezone.utc)
-                    old.superseded_by = new_belief.id
-                    db.add(
-                        MemoryAudit(
-                            action="SUPERSEDE",
-                            memory_id=old.id,
-                            reason=f"contradicted by new belief {new_belief.id}: {new_belief_text!r}",
+            if is_contradiction:
+                # Re-scan for ALL currently-active near-duplicate beliefs
+                # inside this transaction — not just the one candidate the
+                # pre-read outside the transaction happened to see — and
+                # supersede every one of them. Under true concurrency
+                # (multiple independent writers, not just retries of this
+                # same call), other candidates can appear between the
+                # pre-read and this write; trusting only the stale pre-read
+                # id lets "at most one active belief" be violated (verified
+                # by scripts/concurrency_test.py, which caught this as a
+                # real bug before this fix). CockroachDB's SERIALIZABLE
+                # isolation plus this in-transaction re-scan is what makes
+                # "exactly one active belief" a real enforced invariant
+                # rather than a best-effort check.
+                # FOR UPDATE forces a real row lock on every currently-
+                # active belief this transaction reads, so two concurrent
+                # writers superseding the SAME existing belief genuinely
+                # serialize (one blocks/retries) instead of relying on
+                # CockroachDB's phantom-read detection, which — verified
+                # empirically via scripts/concurrency_test.py — does NOT
+                # catch this pattern for brand-new inserts that don't
+                # overlap any existing row's lock.
+                current_active = db.execute(
+                    text(
+                        """
+                        SELECT id, embedding FROM semantic_memory
+                        WHERE valid_to IS NULL AND id != :new_id
+                        FOR UPDATE
+                        """
+                    ),
+                    {"new_id": str(new_belief.id)},
+                ).fetchall()
+                for row in current_active:
+                    dist = _cosine_distance(new_vec, _parse_vec_literal(row.embedding))
+                    if dist < CONTRADICTION_SIM_THRESHOLD:
+                        old = db.get(SemanticMemory, row.id)
+                        old.valid_to = datetime.now(timezone.utc)
+                        old.superseded_by = new_belief.id
+                        db.add(
+                            MemoryAudit(
+                                action="SUPERSEDE",
+                                memory_id=old.id,
+                                reason=f"contradicted by new belief {new_belief.id}: {new_belief_text!r}",
+                            )
                         )
-                    )
 
             db.add(MemoryAudit(action="WRITE", memory_id=new_belief.id, reason="semantic belief recorded"))
 

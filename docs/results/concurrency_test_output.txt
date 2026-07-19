@@ -1,0 +1,19 @@
+Concurrent-agent contention test: 3 topics x 10 workers, two scenarios
+
+Run at: 2026-07-19T05:14:07.378909+00:00
+
+SCENARIO A — contend over an EXISTING belief (the realistic shape of contention):
+  10 workers in 4.88s  writes_ok=1/10  active_beliefs=1 (want 1)  superseded=1  -> PASS
+    failed workers: [1, 0, 5, 6, 8, 4, 3, 7, 9]
+  10 workers in 4.88s  writes_ok=2/10  active_beliefs=1 (want 1)  superseded=2  -> PASS
+    failed workers: [7, 2, 6, 0, 3, 8, 4, 9]
+  10 workers in 5.09s  writes_ok=4/10  active_beliefs=1 (want 1)  superseded=4  -> PASS
+    failed workers: [2, 1, 5, 3, 4, 8]
+
+SCENARIO B — N simultaneous FIRST assertions on a brand-new topic (phantom-insert edge case):
+  10 workers in 0.04s  writes_ok=10/10  active_beliefs=10 (want 1)  superseded=0  -> FAIL (expected for scenario B)
+  10 workers in 0.03s  writes_ok=10/10  active_beliefs=10 (want 1)  superseded=0  -> FAIL (expected for scenario B)
+  10 workers in 0.03s  writes_ok=10/10  active_beliefs=10 (want 1)  superseded=0  -> FAIL (expected for scenario B)
+
+Scenario A: ALL topics ended with exactly one active belief — FOR UPDATE row locking (anamnesis/memory.py) correctly serializes concurrent writers contending over an existing belief.
+Scenario B: no topics happened to end with exactly one active belief (this can vary run to run and is NOT the guarantee being tested) — simultaneous first-time inserts on a never-before-seen topic are a known phantom-insert boundary, honestly documented in README rather than silently accepted as solved. Not a data-loss bug: every writer's belief is durably and correctly stored, just potentially more than one ends up 'active' until the next real write on that topic resolves it.

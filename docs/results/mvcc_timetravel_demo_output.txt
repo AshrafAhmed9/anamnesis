@@ -1,0 +1,16 @@
+MVCC time-travel demo: two independent time-travel mechanisms, both verified
+
+Run at: 2026-07-19T05:19:03.455263+00:00
+
+Bitemporal beliefs_asof(before upgrade): ['user is on the Free plan']
+Bitemporal beliefs_asof(now):            ['user upgraded to the Pro plan']
+Physical AS OF SYSTEM TIME(before):      ['user is on the Free plan']
+Physical AS OF SYSTEM TIME(now):         ['user upgraded to the Pro plan', 'user is on the Free plan']
+
+Note the difference in the 'now' row: the bitemporal view correctly shows
+only the CURRENTLY ACTIVE belief (Pro plan) — that's what an agent should
+recall. The physical AS-OF-SYSTEM-TIME view at 'now' shows BOTH rows,
+because both physically exist in CockroachDB's storage — it answers a
+different question ('what rows exist / existed'), not 'what's true now'.
+
+PASS: both mechanisms correctly distinguish before/after the upgrade.
