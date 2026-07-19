@@ -17,7 +17,8 @@ sam deploy --guided \
 ```
 
 This provisions:
-- **ChatApiFunction** — Lambda Function URL serving the FastAPI app (`/chat`, `/memory/*`, `/health`).
+- **DatabaseSecret** — an `AWS::SecretsManager::Secret` seeded from the `DatabaseUrl` parameter above. The parameter only exists to get the value into Secrets Manager at deploy time; every Lambda function receives `DATABASE_SECRET_ARN` (an ARN, not the credential) and resolves the real connection string from Secrets Manager at cold start, so it's never a plaintext Lambda environment variable.
+- **ChatApiFunction** — Lambda Function URL serving the FastAPI app (`/chat`, `/memory/*`, `/metrics`, `/demo/seed`, `/health`). Set `ANAMNESIS_API_TOKEN` on the function if you want to gate the public URL behind a shared secret (give the token to judges in the Devpost testing-notes field) — `/health` always stays open.
 - **ConsolidationFunction** — EventBridge-scheduled (every 30 min) Lambda that folds low-salience episodic memory into semantic beliefs and writes a JSON report to S3.
 - **OpsAgentFunction** — EventBridge-scheduled (hourly) Lambda that runs the ccloud CLI ops sub-agent (see below).
 - **ReportsBucket** — private S3 bucket for consolidation reports and conversation exports.

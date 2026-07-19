@@ -50,13 +50,41 @@ def _is_retryable(exc: BaseException) -> bool:
     return _RETRYABLE_SQLSTATE in str(exc)
 
 
+_secrets_manager_url_cache: str | None = None
+
+
+def _fetch_database_url_from_secrets_manager(secret_arn: str) -> str:
+    """Resolve DATABASE_URL from AWS Secrets Manager instead of a
+    plaintext environment variable — used in the deployed Lambda stack
+    (infra/template.yaml sets DATABASE_SECRET_ARN, never DATABASE_URL
+    directly) so the credential isn't visible via
+    lambda:GetFunctionConfiguration or CloudFormation parameter history.
+    Cached for the lifetime of the process (a Lambda cold start), so a
+    warm invocation doesn't re-fetch on every call.
+    """
+    global _secrets_manager_url_cache
+    if _secrets_manager_url_cache is not None:
+        return _secrets_manager_url_cache
+
+    import boto3
+
+    client = boto3.client("secretsmanager", region_name=os.environ.get("AWS_REGION"))
+    response = client.get_secret_value(SecretId=secret_arn)
+    _secrets_manager_url_cache = response["SecretString"]
+    return _secrets_manager_url_cache
+
+
 def get_database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
+    secret_arn = os.environ.get("DATABASE_SECRET_ARN")
+    url = _fetch_database_url_from_secrets_manager(secret_arn) if secret_arn else os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError(
-            "DATABASE_URL is not set. Point it at your CockroachDB cluster, e.g.\n"
+            "Neither DATABASE_SECRET_ARN nor DATABASE_URL is set. For local dev, "
+            "point DATABASE_URL at your CockroachDB cluster, e.g.\n"
             "  cockroachdb+psycopg://<user>:<password>@<host>:26257/anamnesis"
-            "?sslmode=verify-full"
+            "?sslmode=verify-full\n"
+            "In the deployed Lambda stack, DATABASE_SECRET_ARN is set automatically "
+            "by infra/template.yaml."
         )
     # Accept a plain postgresql:// URL too, but always dispatch through the
     # official CockroachDB SQLAlchemy dialect (sqlalchemy-cockroachdb), which

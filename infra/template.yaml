@@ -26,12 +26,26 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        DATABASE_URL: !Ref DatabaseUrl
+        # DATABASE_URL itself is intentionally NOT set here — see
+        # DatabaseSecret below. Every function instead gets
+        # DATABASE_SECRET_ARN and resolves the real connection string from
+        # Secrets Manager at cold start (anamnesis/db/engine.py), so the
+        # credential is never stored as a plaintext Lambda environment
+        # variable (visible to anyone with lambda:GetFunctionConfiguration)
+        # or in CloudFormation parameter/console history.
+        DATABASE_SECRET_ARN: !Ref DatabaseSecret
         AWS_REGION: !Ref BedrockRegion
         ANAMNESIS_REPORT_BUCKET: !Ref ReportsBucket
         COCKROACH_CLUSTER_ID: !Ref CockroachClusterId
 
 Resources:
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "anamnesis/${AWS::StackName}/database-url"
+      Description: CockroachDB connection string, seeded from the DatabaseUrl deploy parameter
+      SecretString: !Ref DatabaseUrl
+
   ReportsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -58,6 +72,11 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DatabaseSecret
 
   ConsolidationFunction:
     Type: AWS::Serverless::Function
@@ -73,6 +92,11 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DatabaseSecret
       Events:
         Schedule:
           Type: Schedule
@@ -92,6 +116,11 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: "*"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DatabaseSecret
       Events:
         Schedule:
           Type: Schedule
