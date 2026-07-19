@@ -103,7 +103,29 @@ _SessionFactory: sessionmaker | None = None
 def get_engine() -> Engine:
     global _engine, _SessionFactory
     if _engine is None:
-        _engine = create_engine(get_database_url(), pool_pre_ping=True, future=True)
+        _engine = create_engine(
+            get_database_url(),
+            pool_pre_ping=True,
+            future=True,
+            connect_args={
+                # `connect_timeout` only bounds the initial TCP handshake
+                # for a NEW connection — it does nothing for a connection
+                # that's already open and then goes silent (e.g. the peer
+                # is network-partitioned, not cleanly killed). Verified
+                # empirically via scripts/network_partition_demo.py: an
+                # already-open connection to a `docker network
+                # disconnect`-ed node hung for minutes (the OS default TCP
+                # retransmission timeout), not seconds, until these
+                # keepalive settings were added — a real, meaningfully
+                # different failure mode from a killed process, which
+                # sends an immediate TCP RST instead of just going quiet.
+                "connect_timeout": 5,
+                "keepalives": 1,
+                "keepalives_idle": 3,
+                "keepalives_interval": 2,
+                "keepalives_count": 2,
+            },
+        )
         _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
     return _engine
 

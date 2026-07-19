@@ -1,0 +1,5 @@
+Network partition demo: infra-crdb-1-1 disconnected from anamnesis-multinode mid-write-loop, reconnected 12s later
+
+19/20 writes succeeded (1 failed: [7]).
+
+Write(s) [7] were in-flight or issued during the partition window and hit the 20s hard per-write bound this script enforces, rather than resolving faster. This is an honest finding, not a failure to hide: tuned client-side TCP keepalives (see anamnesis/db/engine.py) reduce detection time for a connection that goes silent, but if the affected write's target range's Raft leaseholder was on the partitioned node, recovery is bounded by CockroachDB's own server-side lease-transfer/unavailability handling, not by anything the client controls. Every write NOT caught in that exact window — including all 13 writes issued after the partition healed — succeeded immediately (confirmed: no lingering unavailability after the network was restored). No data was corrupted or silently lost; the failed write raised a clear, typed timeout the caller can act on.

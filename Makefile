@@ -1,4 +1,4 @@
-.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down concurrency-test mvcc-demo changefeed-demo
+.PHONY: dev-db migrate test run ui clean-dev-db benchmark scale-test multinode-up multinode-init node-kill-demo multinode-down concurrency-test mvcc-demo changefeed-demo network-partition-demo
 
 dev-db:
 	docker rm -f anamnesis-crdb 2>/dev/null || true
@@ -50,6 +50,9 @@ multinode-up:
 
 node-kill-demo:
 	python3 scripts/node_kill_demo.py
+
+network-partition-demo:
+	python3 scripts/network_partition_demo.py
 
 multinode-down:
 	docker compose -f infra/docker-compose.multinode.yml down

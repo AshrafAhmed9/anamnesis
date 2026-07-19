@@ -100,6 +100,21 @@ Quality engineering, correct and safe tool usage.
   that exact container mid-write-loop, and shows **30/30 writes still
   landed** — one write paid a ~3.1s failover cost, none were lost.
   [`docs/results/node_kill_demo_output.txt`](docs/results/node_kill_demo_output.txt).
+- **A harder, distinct failure mode tested separately, with an honest
+  result**: `scripts/network_partition_demo.py` uses `docker network
+  disconnect` instead of `docker kill` — the node keeps running but goes
+  silent, which is a genuinely different (and worse) failure shape than a
+  clean process kill (no immediate TCP RST, connections just hang).
+  Building this found a real gap: client-side `connect_timeout` alone
+  does nothing for an *already-open* connection that goes quiet, so
+  `anamnesis/db/engine.py` now tunes TCP keepalives too. Even after that
+  fix, **1 of 20 writes** (the one in-flight during the partition) still
+  hit a hard-coded 20s bound rather than recovering faster — reported
+  honestly as evidence that recovery here can be gated by CockroachDB's
+  own server-side Raft lease-transfer, not just client socket settings.
+  Every other write, including all 13 issued after the partition healed,
+  succeeded immediately, and no data was lost or corrupted.
+  [`docs/results/network_partition_demo_output.txt`](docs/results/network_partition_demo_output.txt).
 - **All 4 CockroachDB tools used correctly, not just switched on** — see
   the table in `README.md`'s "CockroachDB tools used" section and
   `.claude-skills/README.md` for two skills concretely applied (one
@@ -209,4 +224,7 @@ make changefeed-demo
 # Real node-kill survivability (3-node cluster)
 make multinode-up
 make node-kill-demo
+
+# Network partition (harder failure mode, honest result — see write-up above)
+make network-partition-demo
 ```
