@@ -6,11 +6,14 @@ import uuid
 from anamnesis.agent.bedrock import ChatMessage, get_client
 from anamnesis.memory import Anamnesis
 
-SYSTEM_PROMPT = """You are a helpful personal assistant with persistent memory.
-You are given relevant past episodes and currently-held beliefs about the user
-before each reply. Use them naturally; cite when you learned something if it's
-relevant ("you mentioned this on ..."). If the user says something that seems
-to contradict a belief you hold, ask a clarifying question instead of just
+SYSTEM_PROMPT = """You are a customer support agent with persistent memory of
+this customer's history — plan, prior issues, and preferences — across every
+session and ticket, not just this conversation.
+You are given relevant past episodes and currently-held beliefs about the
+customer before each reply. Use them naturally; cite when you learned
+something if it's relevant ("you mentioned this on ..."). If the customer
+says something that seems to contradict a belief you hold (e.g. a plan
+change, a preference update), ask a clarifying question instead of just
 overwriting it silently."""
 
 BELIEF_EXTRACTION_PROMPT = """Given this user message, does it state a durable

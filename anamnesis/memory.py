@@ -165,8 +165,8 @@ class Anamnesis:
 
         This is *bitemporal* time-travel via the `valid_from`/`valid_to`
         validity-interval columns (application-level history — beliefs are
-        never deleted, only superseded), which is what the four demo
-        scenarios need and is robust to connection pooling. For true
+        never deleted, only superseded), which is what the demo scenarios
+        need and is robust to connection pooling. For true
         MVCC-level system time-travel (recovering a row's exact historical
         physical state, or querying within CockroachDB's garbage-collection
         window regardless of application logic), use

@@ -72,8 +72,13 @@ class TimeTravelRequest(BaseModel):
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
     session_id = req.session_id or str(uuid.uuid4())
-    agent = _agents.setdefault(session_id, Agent(session_id=uuid.UUID(session_id)))
-    reply = agent.turn(req.message)
+    # Not `_agents.setdefault(session_id, Agent(...))`: Python evaluates
+    # that default value eagerly regardless of whether the key already
+    # exists, so it would construct (and immediately discard) a new Agent
+    # on every single call, not just the first one for a session.
+    if session_id not in _agents:
+        _agents[session_id] = Agent(session_id=uuid.UUID(session_id))
+    reply = _agents[session_id].turn(req.message)
     return ChatResponse(session_id=session_id, reply=reply)
 
 
@@ -165,7 +170,8 @@ def seed_demo_data(req: SeedDemoRequest):
     """
     session_id = req.session_id or str(uuid.uuid4())
     sid = uuid.UUID(session_id)
-    _agents.setdefault(session_id, Agent(session_id=sid))  # so a follow-up /chat reuses this session
+    if session_id not in _agents:
+        _agents[session_id] = Agent(session_id=sid)  # so a follow-up /chat reuses this session
     mem = Anamnesis()
 
     seed_turns = [

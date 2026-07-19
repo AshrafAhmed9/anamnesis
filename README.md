@@ -192,7 +192,7 @@ docs/                Architecture diagram, results from the scripts above, Devpo
 
 ## Failure modes & honest limitations (documented, not hidden)
 
-- **Single demo user, no auth.** Multi-tenancy is straightforward to add (scope every query by `tenant_id`) but out of scope for the hackathon window.
+- **Single demo user, no auth.** Multi-tenancy is straightforward to add (scope every query by `tenant_id`) but out of scope for the hackathon window. Concretely: the scheduled consolidation Lambda (`app/lambda_handlers/consolidate.py`) calls `consolidate()` with no `session_id`, so in a real multi-user deployment it would need to loop per-session (or per-tenant) rather than folding every unconsolidated episode cluster-wide into one belief — correct for a single-user demo, a real gap for multi-tenant production use, not silently assumed away.
 - **Contradiction detection is heuristic** — ANN similarity + one LLM call. It will occasionally miss a contradiction phrased very differently from the original belief, or (rarely) flag a false positive; both are visible and correctable in the audit trail rather than silent.
 - **`ccloud` ops agent requires a container-image Lambda for AWS deployment** (the `ccloud` binary isn't pip-installable); documented in `infra/README.md` rather than shipped as a hidden gap.
 - **Salience decay/consolidation thresholds are simple constants**, not tuned on real usage data — flagged as a parameter to tune with production traffic, not a hardcoded assumption we're hiding.

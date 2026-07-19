@@ -69,8 +69,18 @@ class BedrockClient:
 
 
 def _mock_embedding(text: str) -> list[float]:
-    """Deterministic pseudo-embedding derived from text hash — good enough
-    for cosine-similarity behavior in tests/dev without a live model."""
+    """Deterministic pseudo-embedding derived from a text hash. This has
+    NO real semantic structure — two related sentences ("I'm vegetarian" /
+    "I eat meat now") land at an essentially random distance from each
+    other, not a small one — verified while building scripts/benchmark.py
+    and scripts/mvcc_timetravel_demo.py, both of which needed a real local
+    embedding model (sentence-transformers) instead of this mock for
+    anything that depends on actual similarity (contradiction detection,
+    recall quality). This mock is only good enough to exercise the
+    database/transaction code paths (storage, retry, audit) in tests and
+    local dev without a live model or AWS credentials — never trust it for
+    a demo or measurement of recall/contradiction quality.
+    """
     digest = hashlib.sha256(text.encode()).digest()
     seed = int.from_bytes(digest[:8], "big")
     vec = []
