@@ -1,7 +1,8 @@
 [project]
-name = "anamnesis"
+name = "anamnesis-crdb"
 version = "0.1.0"
 description = "Transactional, temporal, self-correcting agentic memory on CockroachDB"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [

@@ -141,6 +141,22 @@ make ui           # static UI on :5173, then open http://localhost:5173?api=http
 
 See [`infra/README.md`](infra/README.md) for cluster setup, Bedrock model access, `sam deploy`, the ccloud RBAC service account, and the MCP judge's guide.
 
+## Using the memory library standalone
+
+`anamnesis/` is a real, independent library — `remember()`, `recall()`, `beliefs_asof()`, `consolidate()` — adoptable by any agent, not tangled with this repo's demo app. Verified buildable/installable end-to-end (`python3 -m build`, `twine check`, installed into a clean venv and imported — see commit history):
+
+```bash
+pip install anamnesis-crdb   # PyPI name; the importable module is still `anamnesis` (same pattern as beautifulsoup4 -> bs4)
+```
+
+```python
+from anamnesis import Anamnesis
+mem = Anamnesis()
+mem.remember(session_id, "user", "I prefer email over phone calls")
+```
+
+Not yet published to PyPI (that's a maintainer action requiring a PyPI account, not something built into CI) — `python3 -m build && twine upload dist/*` from the repo root does it.
+
 ## Repository layout
 
 ```
