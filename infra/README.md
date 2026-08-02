@@ -64,21 +64,23 @@ Store the resulting API key in AWS Secrets Manager, never the org admin key. **K
 
 Judges can inspect the live memory layer directly, read-only, without touching our code:
 
-1. In CockroachDB Cloud Console → your cluster → **Connect** → **MCP Server**, copy the config snippet.
-2. Add it to Claude Code / Cursor / VS Code's MCP config, e.g. `~/.config/claude/mcp.json`:
-   ```json
-   {
-     "mcpServers": {
-       "anamnesis-memory": {
-         "url": "https://cockroachlabs.cloud/mcp",
-         "headers": { "Authorization": "Bearer <read-only-token-from-console>" }
-       }
-     }
-   }
-   ```
-3. Ask your AI assistant things like:
+1. In CockroachDB Cloud Console → your cluster → **Connect** → **MCP Server**, copy the config
+   snippet the console generates for you.
+2. Paste that snippet into your MCP client's config exactly as the console gives it to you (Claude
+   Code: `claude mcp add --transport http <name> <url-from-console>`; Cursor/VS Code: their
+   respective MCP settings file) — **honesty note**: we're deliberately not hand-writing a specific
+   JSON block or auth-header format here. CockroachDB Cloud's MCP auth supports both OAuth 2.0 (for
+   interactive use) and service-account API keys (for automated agents), and the console's own
+   generated snippet is the only version guaranteed to match your account's actual auth method —
+   an invented example here could be subtly wrong and cost a judge more time than it saves. This is
+   an explicit choice to be under-specific rather than confidently wrong.
+3. Once connected, ask your AI assistant things like:
    - "Show me the currently active beliefs in semantic_memory"
    - "How many episodic memories were consolidated in the last hour?"
    - "Show the audit trail for the most recently superseded belief"
 
-The MCP server is safe-by-default (read-only mode, full audit logging), so this is a zero-risk way to verify memory is real, transactional, structured data — not a black box.
+The MCP server is safe-by-default (read-only mode, full audit logging), so this is a low-risk way
+to verify memory is real, transactional, structured data — not a black box. **Status**: this guide
+describes the intended flow based on CockroachDB's own documentation of the feature; it has not
+been run end-to-end against a live MCP client from this machine as part of this project (noted
+honestly rather than presented as verified when it isn't — see README's limitations section).
