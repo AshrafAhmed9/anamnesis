@@ -102,7 +102,7 @@ provenance drawer expands inline, showing three things:
   "deployed on AWS," not just local).
 - One sentence on the persona/impact: a customer-support agent that
   correctly recalls plan changes and preferences across sessions instead
-  of re-asking — 9/12 vs 2/12 correct recall in our own benchmark.
+  of re-asking — 24/50 vs 6/50 correct recall in our own 50-scenario benchmark.
 
 > "Built on CockroachDB, deployed on AWS Lambda, S3, and EventBridge.
 > Anamnesis: memory an agent can actually trust — because it can show you
@@ -138,6 +138,6 @@ Cut to black on the repo URL.
 - [ ] AWS deployment live before recording the closing (2:30) shot
 - [ ] `docs/results/*.txt` outputs match what's shown on screen (no staged fakes)
 - [ ] Captions/subtitles not required but consider burning in the key numbers
-      (30/30, 9/12 vs 2/12) as on-screen text for skimmers
+      (30/30, 24/50 vs 6/50) as on-screen text for skimmers
 - [ ] Export at <3:00 total, upload to YouTube/Vimeo as **Public** (not Unlisted)
 - [ ] Paste the final URL into docs/devpost-submission-draft.md

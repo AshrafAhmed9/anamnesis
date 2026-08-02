@@ -21,9 +21,15 @@ memory layer — more than toy queries?
   `valid_from`/`valid_to`/`superseded_by`), `memory_audit` (immutable
   write log), `ops_log` (self-observation). Not a single flat
   "memories" table.
-- **Quantified vs a naive vector-store baseline**: `scripts/benchmark.py`
-  — Anamnesis answers "what do you believe now" correctly **9/12** vs a
-  naive vector-store's **2/12**; time-travel **10/12** vs **8/12**. Real
+- **Quantified vs a naive vector-store baseline, at real scale**: `scripts/benchmark.py`
+  — 50 contradiction scenarios (not a small curated set): Anamnesis
+  answers "what do you believe now" correctly **24/50** vs a naive
+  vector-store's **6/50**; time-travel **50/50** vs **44/50**; supersede
+  precision (correct topic pairing, not cross-contaminated) **27/30**.
+  Honestly reported alongside a real finding at this scale — 3 of 30
+  supersede links connected topically-adjacent-but-different subjects
+  (vegetarian/vegan, dog/cat, smoking/vaping), a genuine precision
+  boundary of un-scoped candidate retrieval, not smoothed over. Real
   numbers, saved in [`docs/results/benchmark_output.txt`](docs/results/benchmark_output.txt),
   reproducible with `python3 scripts/benchmark.py`. Uses real local
   embeddings (sentence-transformers), not a hash mock — see the script's

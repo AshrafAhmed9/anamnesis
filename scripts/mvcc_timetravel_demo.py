@@ -56,7 +56,11 @@ class ConfirmsPlanChangeLLM(BedrockClient):
 
     def chat(self, messages, system=None, max_tokens=1024):
         prompt = messages[-1].content if messages else ""
-        if "Answer with exactly one word: YES or NO" in prompt:
+        # "YES or NO" (not the old exact "Answer with exactly one word:
+        # YES or NO" string) — same stale-prompt-string regression fixed
+        # in scripts/benchmark.py and scripts/concurrency_test.py after
+        # memory.py's confirmation prompt was reworded to chain-of-thought.
+        if "YES or NO" in prompt:
             return "YES" if "plan" in prompt.lower() else "NO"
         if "respond with exactly: NONE" in prompt:
             return "NONE"

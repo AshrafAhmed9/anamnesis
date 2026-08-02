@@ -1,7 +1,13 @@
-Anamnesis vs naive vector-store-only memory — 12 contradiction scenarios
-Run at: 2026-07-19T18:54:47.650381+00:00
+Anamnesis vs naive vector-store-only memory — 50 contradiction scenarios
+Run at: 2026-08-02T10:21:58.402862+00:00
 
 Metric                                          Anamnesis    Naive vector store
 -------------------------------------------------------------------------------
-"What do you believe now" — correct                  9/12                  2/12
-Time-travel ("before the change") — correct         10/12                  8/12
+"What do you believe now" — correct                 24/50                  6/50
+Time-travel ("before the change") — correct         50/50                 44/50
+Supersede precision — correct topic pairing         27/30      n/a (no lineage)
+
+Honest finding: 3 of 30 supersede link(s) connected topically-adjacent but different subjects (candidates are drawn from ALL active beliefs by embedding distance, not scoped to a topic) — a genuine precision boundary at this scale, not hidden. Examples:
+  - "My dog Max passed away, I don't have a dog anymore" -> "my cat passed away, I don't have a cat anymore"
+  - 'I am not vegetarian anymore, I eat meat now' -> "I went vegan, I don't eat dairy anymore"
+  - 'I quit smoking cigarettes completely' -> 'I quit vaping completely'

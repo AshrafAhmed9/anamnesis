@@ -85,7 +85,14 @@ class AlwaysContradictLLM(BedrockClient):
 
     def chat(self, messages, system=None, max_tokens=1024):
         prompt = messages[-1].content if messages else ""
-        if "Answer with exactly one word: YES or NO" in prompt:
+        # "YES or NO" (not the old exact "Answer with exactly one word:
+        # YES or NO" string) — memory.py's _llm_confirms_contradiction
+        # prompt was reworded to a chain-of-thought style (see
+        # anamnesis/agent/bedrock.py's STRUCTURED_TASK_SYSTEM_PROMPT
+        # comment for why); this override went stale and silently stopped
+        # confirming ANY contradiction until re-verified and fixed here,
+        # same regression caught in scripts/benchmark.py.
+        if "YES or NO" in prompt:
             return "YES"
         if "respond with exactly: NONE" in prompt:
             return "NONE"
