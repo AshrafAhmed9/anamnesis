@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, text
 
-from anamnesis.agent.bedrock import BedrockClient, ChatMessage, get_client
+from anamnesis.agent.bedrock import STRUCTURED_TASK_SYSTEM_PROMPT, BedrockClient, ChatMessage, get_client
 from anamnesis.db.engine import run_in_transaction, session_scope
 from anamnesis.db.models import EpisodicMemory, MemoryAudit, SemanticMemory
 
@@ -349,11 +349,26 @@ class Anamnesis:
         prompt = (
             f"Existing belief: {old_belief!r}\n"
             f"New statement: {new_belief!r}\n"
-            "Does the new statement contradict or supersede the existing belief? "
-            "Answer with exactly one word: YES or NO."
+            "Think step by step: what does the existing belief claim, and what does "
+            "the new statement claim about the same topic? Do they conflict?\n"
+            "End your answer with a final line containing exactly one word: YES or NO."
         )
-        answer = self.llm.chat([ChatMessage(role="user", content=prompt)]).strip().upper()
-        return answer.startswith("YES")
+        # Chain-of-thought ("think step by step... end with...") rather than
+        # a bare "answer YES or NO" — found while stress-testing this
+        # against local_llm.OllamaClient's small local model: asked to
+        # answer directly, it incorrectly said "NO" for a clear
+        # contradiction ("I am vegetarian" vs "I used to be vegetarian but
+        # I'm not anymore"), a known weakness of small models on implicit-
+        # negation reasoning. Prompting it to reason through the two
+        # claims first, then state YES/NO on the final line, fixed this —
+        # verified against the same pair. Claude via Bedrock handles both
+        # prompt styles correctly, so this doesn't trade away accuracy
+        # there; it costs a few more output tokens.
+        answer = self.llm.chat(
+            [ChatMessage(role="user", content=prompt)], system=STRUCTURED_TASK_SYSTEM_PROMPT, max_tokens=300
+        ).strip()
+        last_line = next((ln for ln in reversed(answer.splitlines()) if ln.strip()), "")
+        return last_line.strip().upper().startswith("YES")
 
     # -------------------------------------------------------- consolidation
 

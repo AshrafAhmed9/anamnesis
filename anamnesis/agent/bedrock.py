@@ -20,6 +20,27 @@ def _mock_enabled() -> bool:
     return os.environ.get("ANAMNESIS_MOCK_LLM", "").lower() in ("1", "true", "yes")
 
 
+# Used by every structured/classification LLM call in anamnesis/memory.py
+# and anamnesis/agent/loop.py (belief extraction, contradiction
+# confirmation) — these send an instruction embedded in a user-role
+# message with no system prompt. Claude via Bedrock follows that reliably
+# on its own, but was found (running the real contradiction-detection
+# demo repeatedly against local_llm.OllamaClient's much smaller model)
+# to sometimes ignore the instruction entirely and answer the *content* of
+# the message conversationally instead of extracting/classifying it —
+# e.g. asked to extract a belief from "I am not vegetarian anymore, I eat
+# meat now", it replied "I'm not aware of any information about your
+# dietary preferences" as if chatting, rather than returning the belief
+# text. Passing this as an explicit system prompt fixed it completely and
+# didn't change Claude/mock behavior (verified against both), so it's used
+# unconditionally rather than only for the local-model path.
+STRUCTURED_TASK_SYSTEM_PROMPT = (
+    "You are a precise information-extraction function, not a conversational "
+    "assistant. Follow the instructions in the message exactly and output "
+    "only what is requested, nothing else."
+)
+
+
 @dataclass
 class ChatMessage:
     role: str  # "user" | "assistant" | "system"
@@ -105,16 +126,52 @@ def _mock_chat(messages: list[ChatMessage], system: str | None) -> str:
     last = messages[-1].content if messages else ""
     if "respond with exactly: NONE" in last:
         return "NONE"
-    if "Answer with exactly one word: YES or NO" in last:
+    # "YES or NO" (not the old exact "Answer with exactly one word: YES or
+    # NO" phrase) so this still matches memory.py's contradiction-
+    # confirmation prompt after it was reworded to ask for chain-of-thought
+    # reasoning ending in a YES/NO line — that rewording was needed to fix
+    # a real accuracy problem with local_llm.OllamaClient's small model,
+    # unrelated to mock mode, but the mock's pattern match has to track it
+    # or this silently stops returning its safe "NO" default and falls
+    # through to the generic echo instead (caught by re-running
+    # tests/test_llm_client_selection.py-style checks after the reword).
+    if "YES or NO" in last:
         return "NO"
     return f"[mock-llm] acknowledged: {last[:200]}"
 
 
-_default_client: BedrockClient | None = None
+_default_client = None
 
 
-def get_client() -> BedrockClient:
+def get_client():
+    """Client selection order:
+
+    1. ANAMNESIS_MOCK_LLM=1 (explicit) -> BedrockClient's own hash/keyword
+       mock. Unchanged from before this function grew a second real
+       backend — every existing test and the deployed Lambda stack that
+       sets this stays on exactly the same code path as always.
+    2. Local Ollama server reachable (and mock not explicitly requested)
+       -> local_llm.OllamaClient: a genuinely real LLM (Llama 3.2) and a
+       genuinely real embedding model, not a mock, running for free with
+       no cloud credential. This is what local dev and the demo video use
+       by default, since it makes contradiction detection and recall
+       actually semantically correct instead of a canned placeholder
+       string — Bedrock is blocked on this project's AWS account (see
+       README's honest-limitations section), so this is the real-model
+       alternative for anything that isn't the deployed Lambda stack
+       (which has no Ollama server to reach, and correctly skips straight
+       to option 3).
+    3. Otherwise -> BedrockClient, which itself falls back to the mock if
+       boto3 can't initialize or ANAMNESIS_MOCK_LLM ends up (indirectly)
+       relevant. This is the deployed-stack / CI-without-Ollama path.
+    """
     global _default_client
     if _default_client is None:
-        _default_client = BedrockClient()
+        if not _mock_enabled():
+            from . import local_llm
+
+            if local_llm.ollama_reachable():
+                _default_client = local_llm.OllamaClient()
+        if _default_client is None:
+            _default_client = BedrockClient()
     return _default_client

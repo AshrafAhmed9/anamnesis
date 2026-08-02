@@ -30,6 +30,12 @@ dev = [
 bench = [
     "sentence-transformers>=2.7",
 ]
+local-llm = [
+    # anamnesis/agent/local_llm.py's real (non-mocked) local fallback for
+    # embeddings — Ollama itself (for chat) is a separate, non-pip binary:
+    # `brew install ollama && ollama pull llama3.2`, or see ollama.com.
+    "sentence-transformers>=2.7",
+]
 langchain = [
     "langchain-core>=0.3",
 ]

@@ -37,6 +37,14 @@
   .belief { padding: 8px 10px; background: var(--panel); border-radius: 6px; margin-bottom: 6px;
     font-size: 13px; border-left: 3px solid var(--accent); }
   .belief .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .belief.superseded { border-left-color: var(--danger); opacity: 0.75; }
+  .belief.superseded .belief-text { text-decoration: line-through; text-decoration-color: var(--danger); color: var(--muted); }
+  .belief .arrow { color: var(--danger); font-weight: 700; margin: 0 4px; }
+  .belief .successor { color: var(--text); text-decoration: none; }
+  .belief.superseded { animation: flash-super 900ms ease-out; }
+  @keyframes flash-super { from { background: rgba(248,113,113,0.28); } to { background: var(--panel); } }
+  .belief.active-new { animation: flash-new 900ms ease-out; }
+  @keyframes flash-new { from { background: rgba(94,234,212,0.28); } to { background: var(--panel); } }
   .audit-row { font-size: 12px; padding: 4px 0; color: var(--muted); font-family: ui-monospace, monospace; }
   .audit-row .action { color: var(--accent2); font-weight: 600; }
   .audit-row .action.SUPERSEDE { color: var(--danger); }
@@ -147,14 +155,38 @@ function ChatPanel({ onMemoryChange }) {
 }
 
 function MemoryPanel({ refreshKey, triggerRefresh }) {
-  const [beliefs, refetchBeliefs] = useApi("/memory/beliefs", 4000);
-  const [audit, refetchAudit] = useApi("/memory/audit", 4000);
+  // /memory/beliefs/timeline (not the currently-active-only /memory/beliefs)
+  // so a superseded belief stays visible with a struck-through line to
+  // whatever replaced it, instead of just vanishing when a contradiction
+  // resolves — that link IS the demo moment this project is built around.
+  const [timeline, refetchTimeline] = useApi("/memory/beliefs/timeline", 3000);
+  const [audit, refetchAudit] = useApi("/memory/audit", 3000);
+  const seenIds = useRef(new Set());
+  const [freshIds, setFreshIds] = useState(new Set());
 
-  useEffect(() => { refetchBeliefs(); refetchAudit(); }, [refreshKey]);
+  useEffect(() => { refetchTimeline(); refetchAudit(); }, [refreshKey]);
+
+  // Track which rows are new-since-last-poll so we can flash them —
+  // makes a supersede event visually unmissable instead of a silent
+  // list reorder, especially useful for the demo recording.
+  useEffect(() => {
+    if (!timeline) return;
+    const fresh = new Set();
+    for (const b of timeline) {
+      const key = b.id + ":" + (b.valid_to || "");
+      if (!seenIds.current.has(key)) fresh.add(b.id);
+      seenIds.current.add(key);
+    }
+    if (fresh.size) {
+      setFreshIds(fresh);
+      const t = setTimeout(() => setFreshIds(new Set()), 900);
+      return () => clearTimeout(t);
+    }
+  }, [timeline]);
 
   const consolidate = async () => {
     await fetch(API_BASE + "/memory/consolidate", { method: "POST" });
-    refetchBeliefs(); refetchAudit();
+    refetchTimeline(); refetchAudit();
   };
 
   return (
@@ -162,17 +194,33 @@ function MemoryPanel({ refreshKey, triggerRefresh }) {
       <h2>Live Memory</h2>
       <div className="toolbar">
         <button onClick={consolidate}>Trigger consolidation</button>
-        <button onClick={() => { refetchBeliefs(); refetchAudit(); }}>Refresh</button>
+        <button onClick={() => { refetchTimeline(); refetchAudit(); }}>Refresh</button>
       </div>
       <div className="section">
-        <h3>Currently held beliefs</h3>
-        {(!beliefs || beliefs.length === 0) && <div className="empty">No beliefs yet.</div>}
-        {beliefs && beliefs.map(b => (
-          <div className="belief" key={b.id}>
-            {b.belief}
-            <div className="meta">confidence {Number(b.confidence).toFixed(2)} · since {new Date(b.valid_from).toLocaleString()}</div>
-          </div>
-        ))}
+        <h3>Belief timeline</h3>
+        {(!timeline || timeline.length === 0) && <div className="empty">No beliefs yet.</div>}
+        {timeline && timeline.map(b => {
+          const isSuperseded = !!b.valid_to;
+          const justChanged = freshIds.has(b.id);
+          return (
+            <div
+              className={"belief" + (isSuperseded ? " superseded" : "") + (justChanged ? (isSuperseded ? " superseded" : " active-new") : "")}
+              key={b.id}
+            >
+              <span className="belief-text">{b.belief}</span>
+              {isSuperseded && b.superseded_by_belief && (
+                <React.Fragment>
+                  <span className="arrow">→</span>
+                  <span className="successor">{b.superseded_by_belief}</span>
+                </React.Fragment>
+              )}
+              <div className="meta">
+                confidence {Number(b.confidence).toFixed(2)} · since {new Date(b.valid_from).toLocaleString()}
+                {isSuperseded ? ` · superseded ${new Date(b.valid_to).toLocaleString()}` : " · active"}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="section" style={{ flex: 1 }}>
         <h3>Audit stream</h3>

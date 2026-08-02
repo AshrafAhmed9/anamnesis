@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from anamnesis.agent.bedrock import ChatMessage, get_client
+from anamnesis.agent.bedrock import STRUCTURED_TASK_SYSTEM_PROMPT, ChatMessage, get_client
 from anamnesis.memory import Anamnesis
 
 SYSTEM_PROMPT = """You are a customer support agent with persistent memory of
@@ -54,7 +54,8 @@ class Agent:
 
     def _maybe_extract_belief(self, user_message: str) -> None:
         candidate = self.llm.chat(
-            [ChatMessage(role="user", content=BELIEF_EXTRACTION_PROMPT.format(message=user_message))]
+            [ChatMessage(role="user", content=BELIEF_EXTRACTION_PROMPT.format(message=user_message))],
+            system=STRUCTURED_TASK_SYSTEM_PROMPT,
         ).strip()
         if candidate and candidate.upper() != "NONE":
             self.memory.detect_and_resolve_contradiction(candidate, source_episode_ids=[])

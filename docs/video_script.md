@@ -20,16 +20,33 @@ Show: `docs/architecture.png` full-screen for these 15s.
 
 ## 0:15–0:50 — Contradiction + supersede, live (the money shot)
 
-- Chat UI: type as the user, "I'm vegetarian." Agent acknowledges.
-- Type: "Book me a table and get me the chicken tikka."
-- Agent flags the contradiction, asks for clarification.
-- Cut to terminal: `SELECT id, content, valid_from, valid_to, superseded_by
-  FROM semantic_memory ORDER BY valid_from;` — show the old belief now has
-  `valid_to` set and `superseded_by` pointing at the new row, both written
-  in one SERIALIZABLE transaction with an audit row alongside.
+Use this exact wording — stress-tested for reliable, repeatable triggering
+(verified 3/3 identical runs; a paraphrase with less word overlap with the
+original belief can miss the similarity threshold entirely with the local
+demo model — see README's honest-limitations section, so don't ad-lib this
+one on camera):
+
+- Chat UI: type as the user, **"I'm vegetarian and don't eat meat."**
+  Agent acknowledges; watch the right-hand "Live Memory" panel — a new
+  belief card appears (briefly flashes teal).
+- Type: **"Actually I am not vegetarian anymore, I eat meat now."**
+  Agent replies acknowledging the update. In the memory panel: the old
+  belief card now shows struck-through text with a red arrow (→) pointing
+  to the new belief text, and briefly flashes red. The audit stream below
+  it shows a `SUPERSEDE` row (also red) referencing the new belief's ID.
+- Hover/point at the struck-through belief + arrow for a beat — this *is*
+  the demo moment, make sure it's clearly on screen and not a fast cut.
+- Optional: cut to terminal running the same exchange via
+  `python3 -c "..."` (see anamnesis/agent/loop.py's Agent) and a
+  `SELECT belief, valid_to, superseded_by FROM semantic_memory ORDER BY
+  valid_from;` for the judges who want to see it isn't UI trickery.
 
 > "The old belief isn't overwritten — it's superseded, with a full audit
-> trail, atomically."
+> trail, atomically, in the same CockroachDB transaction. And that's a
+> real Llama 3.2 model reasoning about the contradiction, not a canned
+> response — Bedrock is blocked on this AWS account for now, so the demo
+> runs on a free local model instead; the integration code for Bedrock
+> itself is real and ready the moment access clears."
 
 ## 0:50–1:20 — Time-travel over beliefs
 
@@ -81,7 +98,25 @@ Cut to black on the repo URL.
 
 ---
 
+## Before you hit record
+
+1. `ollama serve` running, `ollama list` shows `llama3.2` (already pulled
+   as of this writing) — this is what powers real reasoning in the 0:15
+   scene, no AWS/API key needed.
+2. `make dev-db && make migrate` for a clean local CockroachDB, or point
+   at the live AWS deployment for extra credibility on the closing shot.
+3. `uvicorn app.main:app --port 8000` + `cd ui && python3 -m http.server
+   5173`, open `http://localhost:5173/index.html?api=http://localhost:8000`.
+4. **Do one full practice run of the 0:15 contradiction scene before
+   recording for real.** The exact wording in that section is stress-
+   tested and reliable, but a local 3B model's output isn't perfectly
+   bit-for-bit deterministic run to run (verified: same input,
+   temperature=0, occasionally still produces a slightly different
+   paraphrase) — a dry run confirms it's behaving before the take that
+   counts, and costs under a minute.
+
 ## Recording checklist
+- [ ] Practice run of the 0:15 contradiction scene done, worked correctly
 - [ ] AWS deployment live before recording the 2:25 shot
 - [ ] `docs/results/*.txt` outputs match what's shown on screen (no staged fakes)
 - [ ] Captions/subtitles not required but consider burning in the key numbers

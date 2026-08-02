@@ -22,7 +22,15 @@ def test_get_database_url_resolves_from_secrets_manager(monkeypatch):
     with patch("boto3.client", return_value=mock_client) as mock_boto3_client:
         url = engine_module.get_database_url()
 
-    assert url == "cockroachdb+psycopg://root@example.com:26257/anamnesis?sslmode=verify-full"
+    # get_database_url() appends sslrootcert=<certifi bundle> to any
+    # sslmode=verify-full URL that doesn't already specify one (see
+    # anamnesis/db/engine.py) — required for the deployed Lambda stack,
+    # whose minimal base image has no OS trust store libpq can use, and
+    # harmless/identical-behavior locally since certifi's CA bundle
+    # includes the same public CAs (verified against a real CockroachDB
+    # Cloud connection, which is issued by Let's Encrypt).
+    assert url.startswith("cockroachdb+psycopg://root@example.com:26257/anamnesis?sslmode=verify-full")
+    assert "sslrootcert=" in url
     mock_boto3_client.assert_called_once_with("secretsmanager", region_name=None)
     mock_client.get_secret_value.assert_called_once_with(
         SecretId="arn:aws:secretsmanager:us-east-1:123:secret:anamnesis/db-url"

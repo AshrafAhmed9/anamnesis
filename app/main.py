@@ -99,6 +99,37 @@ def current_beliefs():
     return [dict(r._mapping) for r in rows]
 
 
+@app.get("/memory/beliefs/timeline")
+def belief_timeline():
+    """Every belief ever held, active or superseded, each showing what
+    (if anything) replaced it — not just the currently-active set that
+    `/memory/beliefs` returns.
+
+    This exists because the currently-active-only view makes the
+    supersede chain invisible: an old belief that gets contradicted just
+    vanishes from that list, even though `superseded_by` and a SUPERSEDE
+    audit row both exist for it — the *mechanism* this whole project is
+    built to demonstrate. The UI's belief-timeline panel uses this to
+    render struck-through old beliefs with an arrow to their successor.
+    """
+    with session_scope() as db:
+        rows = db.execute(
+            text(
+                """
+                SELECT
+                    old.id, old.belief, old.confidence,
+                    old.valid_from, old.valid_to, old.superseded_by,
+                    new.belief AS superseded_by_belief
+                FROM semantic_memory old
+                LEFT JOIN semantic_memory new ON new.id = old.superseded_by
+                ORDER BY old.valid_from DESC
+                LIMIT 100
+                """
+            )
+        ).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
 @app.get("/memory/audit")
 def audit_stream(limit: int = 50):
     with session_scope() as db:
