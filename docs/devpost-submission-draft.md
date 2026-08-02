@@ -12,7 +12,7 @@ Agentic memory as a distributed SQL problem — transactional, temporal, self-co
 
 ## Links
 - **GitHub repo:** https://github.com/AshrafAhmed9/anamnesis
-- **Demo URL:** ⬜ (Lambda Function URL after `sam deploy`)
+- **Demo URL:** https://5y52iimwosyg62vshke43wivtu0wspsd.lambda-url.us-east-1.on.aws/ (live Lambda Function URL — try `POST /demo/seed` then `POST /chat`, or `GET /metrics`)
 - **Video:** ⬜ (YouTube/Vimeo link, public, ≤3 min)
 
 ## Text description
@@ -89,6 +89,19 @@ truth — which is what CockroachDB is for.
 - **Amazon EventBridge** — schedules the consolidation Lambda (every 30
   min) and the ops-agent Lambda (hourly).
 - **Amazon S3** — stores consolidation reports and conversation exports.
+
+**Note on Bedrock at judging time:** Bedrock's `InvokeModel` is currently
+blocked account-wide on the AWS account this was built with ("Operation
+not allowed" — confirmed with AWS Support, case 178439660900442, as an
+account-history gate on a brand-new account, not a code or config issue).
+The full Claude + Titan integration is written and exercised against the
+real Bedrock request/response shape (`anamnesis/agent/bedrock.py`), and
+the live deployment above runs on the same deterministic mock-LLM fallback
+already used honestly throughout local dev and CI
+(`ANAMNESIS_MOCK_LLM=1`) — every other part of the stack (CockroachDB
+transactions, retries, contradiction/supersede, time-travel, Lambda,
+EventBridge, S3, Secrets Manager) is fully real and live. Flipping Bedrock
+on once access clears is a one-line redeploy (`MockLlm=0`), not a rebuild.
 
 ## Architecture diagram
 `docs/architecture.png` in the repo (also embedded in the README).

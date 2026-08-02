@@ -93,6 +93,25 @@ def get_database_url() -> str:
         url = "cockroachdb+psycopg://" + url[len("postgresql+psycopg://"):]
     elif url.startswith("postgresql://"):
         url = "cockroachdb+psycopg://" + url[len("postgresql://"):]
+    # sslmode=verify-full (CockroachDB Cloud's default) makes psycopg look
+    # for a root CA cert at a fixed local path (~/.postgresql/root.crt on
+    # the connecting machine) unless told otherwise. That path exists on a
+    # dev laptop that's run `cockroach cert` before, but not in a fresh
+    # Lambda execution environment — found by actually deploying and
+    # hitting a real OperationalError, not by inspection.
+    #
+    # sslrootcert=system (tried first) failed too: AWS Lambda's minimal
+    # Python base image doesn't expose a usable OS trust store to libpq,
+    # so verification failed with "certificate verify failed" — also found
+    # by actually deploying, not by inspection. certifi bundles its own,
+    # always-present CA store as a regular Python package dependency, so
+    # it works identically on macOS and Lambda regardless of what OS-level
+    # trust store (if any) is present.
+    if "sslmode=verify-full" in url and "sslrootcert=" not in url:
+        import certifi
+
+        cert_param = f"sslrootcert={certifi.where()}"
+        url += f"&{cert_param}" if "?" in url else f"?{cert_param}"
     return url
 
 

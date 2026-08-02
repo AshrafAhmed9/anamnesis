@@ -1,6 +1,6 @@
 MVCC time-travel demo: two independent time-travel mechanisms, both verified
 
-Run at: 2026-07-19T05:19:03.455263+00:00
+Run at: 2026-07-19T18:55:20.721770+00:00
 
 Bitemporal beliefs_asof(before upgrade): ['user is on the Free plan']
 Bitemporal beliefs_asof(now):            ['user upgraded to the Pro plan']

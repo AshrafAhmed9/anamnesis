@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn>=0.29",
     "python-dotenv>=1.0",
     "tenacity>=8.2",
+    "certifi>=2024.2.2",
 ]
 
 [project.optional-dependencies]

@@ -17,6 +17,19 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional — enables the ccloud ops sub-agent if set
+  MockLlm:
+    Type: String
+    Default: "1"
+    AllowedValues: ["0", "1"]
+    Description: >
+      "1" (default) runs anamnesis/agent/bedrock.py's deterministic mock
+      instead of calling Bedrock — set to "0" once real InvokeModel access
+      is granted on this AWS account (Bedrock currently returns
+      "Operation not allowed" pending account history / use-case
+      approval; the mock path is the same honestly-documented fallback
+      already used in tests/CI, not a hidden workaround). All memory
+      writes, transactions, retries, and the CockroachDB integration are
+      fully real either way — only the embedding/chat calls are mocked.
 
 Globals:
   Function:
@@ -34,9 +47,15 @@ Globals:
         # variable (visible to anyone with lambda:GetFunctionConfiguration)
         # or in CloudFormation parameter/console history.
         DATABASE_SECRET_ARN: !Ref DatabaseSecret
-        AWS_REGION: !Ref BedrockRegion
+        # AWS_REGION is a Lambda-reserved env var (auto-populated by the
+        # runtime) and cannot be set in the function config — Lambda
+        # rejects deployment if you try. anamnesis/agent/bedrock.py and
+        # anamnesis/db/engine.py already read os.environ["AWS_REGION"],
+        # which Lambda provides for free, so BedrockRegion only matters
+        # for non-Lambda (local/CLI) use via DATABASE_URL-style env setup.
         ANAMNESIS_REPORT_BUCKET: !Ref ReportsBucket
         COCKROACH_CLUSTER_ID: !Ref CockroachClusterId
+        ANAMNESIS_MOCK_LLM: !Ref MockLlm
 
 Resources:
   DatabaseSecret:
