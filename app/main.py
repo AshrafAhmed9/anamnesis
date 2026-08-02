@@ -221,16 +221,24 @@ def seed_demo_data(req: SeedDemoRequest):
         _agents[session_id] = Agent(session_id=sid)  # so a follow-up /chat reuses this session
     mem = Anamnesis()
 
+    # Each seed turn maps to the belief it should produce, so the seeded
+    # data exercises the *real* provenance + supersede path a judge will
+    # click into: every belief points back (source_episodes) at the exact
+    # turn below, and the Free->Pro pair forms a genuine supersede chain
+    # with a SUPERSEDE audit row — not two independent active beliefs.
+    # Previously this passed empty source lists, which left seeded beliefs
+    # with no evidence to show in the /why drawer.
     seed_turns = [
-        "Hi, I'm on the Free plan and I'm having trouble with exports.",
-        "By the way, my billing email is finance@example.com.",
-        "Actually, I just upgraded to the Pro plan this morning.",
+        ("Hi, I'm on the Free plan and I'm having trouble with exports.",
+         "customer is on the Free plan"),
+        ("By the way, my billing email is finance@example.com.",
+         None),
+        ("Actually, I just upgraded to the Pro plan this morning.",
+         "customer upgraded from the Free plan to the Pro plan"),
     ]
-    for turn in seed_turns:
-        mem.remember(sid, "user", turn)
-    mem.detect_and_resolve_contradiction("customer is on the Free plan", source_episode_ids=[])
-    mem.detect_and_resolve_contradiction(
-        "customer upgraded to the Pro plan", source_episode_ids=[]
-    )
+    for turn, belief in seed_turns:
+        episode_id = mem.remember(sid, "user", turn)
+        if belief:
+            mem.detect_and_resolve_contradiction(belief, source_episode_ids=[episode_id])
 
     return {"session_id": session_id, "seeded_turns": len(seed_turns)}
