@@ -37,10 +37,10 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from anamnesis.db.engine import get_engine  # noqa: E402
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.db.engine import get_engine
+from anamnesis.memory import Anamnesis
 
 INIT_CONTAINER = "anamnesis-multiregion-crdb-us-east-1"
 KILL_AFTER_WRITES = 8

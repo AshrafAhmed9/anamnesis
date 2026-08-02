@@ -26,8 +26,9 @@ non-retrying and meant only for straightforward reads.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Callable, Iterator, TypeVar
+from typing import TypeVar
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -213,5 +214,10 @@ def _log_retry(exc: BaseException) -> None:
         with _SessionFactory() as s:  # type: ignore[misc]
             s.add(MemoryAudit(action="RETRY", reason=str(exc)[:500]))
             s.commit()
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 — this audit row is itself
+        # best-effort: if the *retry-logging* write fails (e.g. the same
+        # connection trouble that triggered the retry in the first place),
+        # that must not raise and mask the real error already in flight in
+        # run_in_transaction's own retry loop — silently dropping one audit
+        # row is preferable to hiding the actual failure being retried.
         pass

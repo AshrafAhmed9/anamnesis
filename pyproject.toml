@@ -25,7 +25,12 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
-    "ruff>=0.4",
+    "ruff~=0.16",  # pinned (was >=0.4, unbounded): CI silently went red for
+    # six commits because an unpinned ruff install picked up newer default
+    # lint rules mid-project, not because of an actual code regression each
+    # time — found during a pre-submission review, not by CI itself (it was
+    # failing quietly). ~=0.16 still takes patch updates but won't jump to
+    # a future minor version's new default rules without a deliberate bump.
 ]
 bench = [
     "sentence-transformers>=2.7",

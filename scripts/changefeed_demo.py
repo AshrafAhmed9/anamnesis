@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psycopg
 
@@ -38,7 +38,7 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.memory import Anamnesis
 
 
 def trigger_write(episode_holder: dict) -> None:
@@ -73,7 +73,10 @@ def main() -> None:
         time.sleep(15)
         try:
             conn.close()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 — this is the deliberate
+            # force-close that breaks the streaming loop below; if the
+            # connection is already closed/broken by the time this fires,
+            # that's fine too, there's nothing to do about it either way.
             pass
 
     threading.Thread(target=watchdog, daemon=True).start()
@@ -83,25 +86,31 @@ def main() -> None:
     found = None
     try:
         for row in cur.stream("EXPERIMENTAL CHANGEFEED FOR memory_audit WITH no_initial_scan"):
-            table, key, value = row
+            table, _key, value = row
             payload = json.loads(value)
             after = payload.get("after") or {}
             print(f"  [changefeed event] table={table} action={after.get('action')} memory_id={after.get('memory_id')} reason={after.get('reason')}")
             if episode_holder.get("id") and after.get("memory_id") == episode_holder["id"]:
                 found = after
                 break
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — the watchdog's force-close
+        # above surfaces as some driver-level exception (type varies by
+        # what state the socket was in), and a real stream error should
+        # also be reported here rather than crash the script — both are
+        # legitimate "the stream ended" cases for a bounded demo.
         if found is None:
             print(f"  (stream ended: {exc!r})")
 
     try:
         conn.close()
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 — final best-effort cleanup;
+        # the connection may already be closed (by the watchdog or the
+        # stream error above), which is not a problem worth surfacing.
         pass
 
     report_lines = [
         "CDC changefeed demo: memory_audit events streamed live via CHANGEFEED\n",
-        f"Run at: {datetime.now(timezone.utc).isoformat()}\n",
+        f"Run at: {datetime.now(UTC).isoformat()}\n",
     ]
     if found:
         report_lines.append(

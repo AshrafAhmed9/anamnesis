@@ -26,7 +26,7 @@ from __future__ import annotations
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("ANAMNESIS_MOCK_LLM", "1")
 os.environ.setdefault(
@@ -35,8 +35,8 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from anamnesis.agent.bedrock import BedrockClient  # noqa: E402
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.agent.bedrock import BedrockClient
+from anamnesis.memory import Anamnesis
 
 
 class ConfirmsPlanChangeLLM(BedrockClient):
@@ -83,7 +83,7 @@ def main() -> None:
 
     print("1. Asserting belief: 'user is on the Free plan'")
     mem.detect_and_resolve_contradiction("user is on the Free plan", source_episode_ids=[])
-    t_before_upgrade = datetime.now(timezone.utc)
+    t_before_upgrade = datetime.now(UTC)
     time.sleep(1.0)
 
     print("2. Asserting contradicting belief: 'user upgraded to the Pro plan'")
@@ -91,14 +91,14 @@ def main() -> None:
     time.sleep(0.5)
 
     print("\n--- Bitemporal time-travel (application-level valid_from/valid_to) ---")
-    beliefs_now = mem.beliefs_asof("what plan is the user on", datetime.now(timezone.utc))
+    beliefs_now = mem.beliefs_asof("what plan is the user on", datetime.now(UTC))
     beliefs_before = mem.beliefs_asof("what plan is the user on", t_before_upgrade)
     print(f"  beliefs_asof(now)              -> {[b.belief for b in beliefs_now]}")
     print(f"  beliefs_asof(before the upgrade) -> {[b.belief for b in beliefs_before]}")
 
     print("\n--- Physical MVCC time-travel (AS OF SYSTEM TIME, CockroachDB's own storage) ---")
     physical_before = mem.recall_as_of_system_time(t_before_upgrade, k=5)
-    physical_now = mem.recall_as_of_system_time(datetime.now(timezone.utc), k=5)
+    physical_now = mem.recall_as_of_system_time(datetime.now(UTC), k=5)
     print(f"  recall_as_of_system_time(before) -> {[b.belief for b in physical_before]}")
     print(f"  recall_as_of_system_time(now)    -> {[b.belief for b in physical_now]}")
 
@@ -119,7 +119,7 @@ def main() -> None:
 
     report_lines = [
         "MVCC time-travel demo: two independent time-travel mechanisms, both verified\n",
-        f"Run at: {datetime.now(timezone.utc).isoformat()}\n",
+        f"Run at: {datetime.now(UTC).isoformat()}\n",
         f"Bitemporal beliefs_asof(before upgrade): {[b.belief for b in beliefs_before]}",
         f"Bitemporal beliefs_asof(now):            {[b.belief for b in beliefs_now]}",
         f"Physical AS OF SYSTEM TIME(before):      {[b.belief for b in physical_before]}",

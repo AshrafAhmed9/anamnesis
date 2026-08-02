@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, String, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -30,7 +30,7 @@ class NaiveMemoryRow(Base):
     topic = Column(String, nullable=False)
     content = Column(String, nullable=False)
     embedding = Column(Vector(EMBEDDING_DIM))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 @dataclass

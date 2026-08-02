@@ -48,10 +48,10 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from anamnesis.db.engine import get_engine  # noqa: E402
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.db.engine import get_engine
+from anamnesis.memory import Anamnesis
 
 INIT_CONTAINER = "infra-crdb-1-1"  # used to run `cockroach node status`
 KILL_AFTER_WRITES = 8

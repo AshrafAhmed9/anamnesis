@@ -60,7 +60,12 @@ class BedrockClient:
                 self._client = boto3.client(
                     "bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1")
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 — deliberately broad: ANY boto3 init
+                # failure (missing creds, no region configured, package not
+                # installed in a stripped-down environment, ...) should fall
+                # back to the mock rather than crash the caller; narrowing
+                # this to specific boto3 exception types would mean an
+                # unanticipated one still crashes instead of degrading.
                 self._mock = True
 
     def embed(self, text: str) -> list[float]:

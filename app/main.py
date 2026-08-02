@@ -11,14 +11,14 @@ import uuid
 from datetime import datetime
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from anamnesis.agent.loop import Agent
 from anamnesis.db.engine import session_scope
 from anamnesis.memory import Anamnesis
-from sqlalchemy import text
 
 app = FastAPI(title="Anamnesis", version="0.1.0")
 app.add_middleware(
@@ -42,15 +42,14 @@ _API_TOKEN = os.environ.get("ANAMNESIS_API_TOKEN")
 @app.middleware("http")
 async def track_and_gate(request: Request, call_next):
     _request_counts[request.url.path] = _request_counts.get(request.url.path, 0) + 1
-    if _API_TOKEN and request.url.path not in ("/health",):
-        if request.headers.get("x-api-token") != _API_TOKEN:
-            # Return the response directly rather than `raise HTTPException`:
-            # exceptions raised inside a function-based ASGI middleware sit
-            # outside Starlette's ExceptionMiddleware in the stack (it wraps
-            # user middleware, not the reverse), so a raised HTTPException
-            # here would surface as an unhandled 500, not a clean 401 —
-            # verified empirically before settling on this approach.
-            return JSONResponse(status_code=401, content={"detail": "missing or invalid X-API-Token header"})
+    if _API_TOKEN and request.url.path not in ("/health",) and request.headers.get("x-api-token") != _API_TOKEN:
+        # Return the response directly rather than `raise HTTPException`:
+        # exceptions raised inside a function-based ASGI middleware sit
+        # outside Starlette's ExceptionMiddleware in the stack (it wraps
+        # user middleware, not the reverse), so a raised HTTPException
+        # here would surface as an unhandled 500, not a clean 401 —
+        # verified empirically before settling on this approach.
+        return JSONResponse(status_code=401, content={"detail": "missing or invalid X-API-Token header"})
     return await call_next(request)
 
 

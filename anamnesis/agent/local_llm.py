@@ -30,7 +30,7 @@ import os
 import urllib.error
 import urllib.request
 
-from .bedrock import ChatMessage, EMBEDDING_DIM
+from .bedrock import EMBEDDING_DIM, ChatMessage
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "llama3.2")
@@ -44,7 +44,10 @@ def ollama_reachable(timeout: float = 0.5) -> bool:
     try:
         urllib.request.urlopen(f"{OLLAMA_HOST}/api/tags", timeout=timeout)
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 — any failure (connection refused, DNS,
+        # timeout, ...) just means "not reachable"; get_client() falls
+        # through to Bedrock/mock either way, so the specific exception
+        # type is never actionable here.
         return False
 
 

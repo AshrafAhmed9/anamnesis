@@ -13,11 +13,16 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, text
 
-from anamnesis.agent.bedrock import STRUCTURED_TASK_SYSTEM_PROMPT, BedrockClient, ChatMessage, get_client
+from anamnesis.agent.bedrock import (
+    STRUCTURED_TASK_SYSTEM_PROMPT,
+    BedrockClient,
+    ChatMessage,
+    get_client,
+)
 from anamnesis.db.engine import run_in_transaction, session_scope
 from anamnesis.db.models import EpisodicMemory, MemoryAudit, SemanticMemory
 
@@ -206,7 +211,7 @@ class Anamnesis:
         """
         from anamnesis.db.engine import get_engine
 
-        asof_literal = as_of.astimezone(timezone.utc).isoformat()
+        asof_literal = as_of.astimezone(UTC).isoformat()
         engine = get_engine()
         # AUTOCOMMIT: with the default transactional isolation level,
         # SQLAlchemy/psycopg's pool_pre_ping issues its own lightweight
@@ -326,7 +331,7 @@ class Anamnesis:
                     dist = _cosine_distance(new_vec, _parse_vec_literal(row.embedding))
                     if dist < CONTRADICTION_SIM_THRESHOLD:
                         old = db.get(SemanticMemory, row.id)
-                        old.valid_to = datetime.now(timezone.utc)
+                        old.valid_to = datetime.now(UTC)
                         old.superseded_by = new_belief.id
                         db.add(
                             MemoryAudit(

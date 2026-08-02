@@ -11,8 +11,8 @@ os.environ.setdefault(
     os.environ.get("TEST_DATABASE_URL", "cockroachdb+psycopg://root@localhost:26257/anamnesis_test?sslmode=disable"),
 )
 
-from anamnesis.db.engine import get_engine  # noqa: E402
-from anamnesis.db.models import Base  # noqa: E402
+from anamnesis.db.engine import get_engine
+from anamnesis.db.models import Base
 
 
 @pytest.fixture(scope="session")

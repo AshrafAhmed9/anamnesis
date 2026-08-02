@@ -42,10 +42,10 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from anamnesis.db.engine import get_engine  # noqa: E402
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.db.engine import get_engine
+from anamnesis.memory import Anamnesis
 
 INIT_CONTAINER = "infra-crdb-1-1"
 NETWORK_NAME = "anamnesis-multinode"
@@ -150,8 +150,10 @@ def main() -> None:
     failed = [i for i, err, _ in results if err is not None]
     post_partition_recovered = all(err is None for i, err, _ in results if i > KILL_AFTER_WRITES and i not in failed)
     lines = [
-        f"Network partition demo: {target_container} disconnected from {NETWORK_NAME} mid-write-loop, "
-        f"reconnected {RECONNECT_AFTER_S}s later\n",
+        (
+            f"Network partition demo: {target_container} disconnected from {NETWORK_NAME} mid-write-loop, "
+            f"reconnected {RECONNECT_AFTER_S}s later\n"
+        ),
         f"{ok}/{TOTAL_WRITES} writes succeeded ({len(failed)} failed: {failed}).",
         "",
     ]

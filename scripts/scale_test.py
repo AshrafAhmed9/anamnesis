@@ -22,7 +22,7 @@ import random
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("ANAMNESIS_MOCK_LLM", "1")
 os.environ.setdefault(
@@ -31,9 +31,9 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from anamnesis.db.engine import get_engine, run_in_transaction  # noqa: E402
+from anamnesis.db.engine import get_engine, run_in_transaction
 
 TOPICS = [
     "diet and food preferences", "travel plans", "work projects", "family updates",
@@ -152,7 +152,7 @@ def main() -> None:
 
     report = (
         f"Scale test: {args.rows} rows in episodic_memory, {args.queries} ANN queries (k=5)\n"
-        f"Run at: {datetime.now(timezone.utc).isoformat()}\n\n"
+        f"Run at: {datetime.now(UTC).isoformat()}\n\n"
         f"Embedding throughput:  {args.rows / encode_elapsed:.0f} sentences/s "
         f"(sentence-transformers all-MiniLM-L6-v2, CPU)\n"
         f"Insert throughput:     {args.rows / insert_elapsed:.0f} rows/s "

@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import subprocess
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from anamnesis.agent.bedrock import ChatMessage, get_client
 from anamnesis.db.engine import run_in_transaction
@@ -85,7 +85,7 @@ def handler(event, context):
 
     mem = Anamnesis()
     session_id = uuid.uuid5(uuid.NAMESPACE_DNS, "anamnesis-ops-agent")
-    mem.remember(session_id, "agent", f"[self-observation @ {datetime.now(timezone.utc).isoformat()}] {summary}")
+    mem.remember(session_id, "agent", f"[self-observation @ {datetime.now(UTC).isoformat()}] {summary}")
 
     return {"summary": summary}
 

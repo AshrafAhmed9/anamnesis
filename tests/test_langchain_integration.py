@@ -25,9 +25,10 @@ def test_messages_are_real_anamnesis_episodic_writes(session_id):
     episodic_memory via the normal Anamnesis.remember() path, auditable
     the same way any other write is.
     """
+    from sqlalchemy import text
+
     from anamnesis.db.engine import session_scope
     from anamnesis.integrations.langchain import AnamnesisChatMessageHistory
-    from sqlalchemy import text
 
     history = AnamnesisChatMessageHistory(session_id=session_id)
     history.add_user_message("integration test marker message")

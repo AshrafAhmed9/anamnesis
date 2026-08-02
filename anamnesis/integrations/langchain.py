@@ -30,10 +30,10 @@ import uuid
 
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from sqlalchemy import text
 
 from anamnesis.db.engine import session_scope
 from anamnesis.memory import Anamnesis
-from sqlalchemy import text
 
 _ROLE_TO_LANGCHAIN = {"user": HumanMessage, "agent": AIMessage}
 _LANGCHAIN_TO_ROLE = {HumanMessage: "user", AIMessage: "agent"}

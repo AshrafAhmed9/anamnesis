@@ -43,7 +43,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("ANAMNESIS_MOCK_LLM", "1")
 os.environ.setdefault(
@@ -53,12 +53,13 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from anamnesis.agent.bedrock import BedrockClient  # noqa: E402
-from anamnesis.db.engine import get_engine, session_scope  # noqa: E402
-from anamnesis.db.models import Base  # noqa: E402
-from anamnesis.memory import Anamnesis, _cosine_distance  # noqa: E402
-from scripts.naive_vector_memory import NaiveVectorMemory  # noqa: E402
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
+
+from anamnesis.agent.bedrock import BedrockClient
+from anamnesis.db.engine import get_engine, session_scope
+from anamnesis.db.models import Base
+from anamnesis.memory import Anamnesis, _cosine_distance
+from scripts.naive_vector_memory import NaiveVectorMemory
 
 NEGATION_CUES = re.compile(
     r"\b(not anymore|no longer|not .* now|actually|instead|"
@@ -182,7 +183,7 @@ def run_benchmark() -> None:
         anamnesis.detect_and_resolve_contradiction(s.old_belief, source_episode_ids=[])
         naive.remember(s.topic, s.old_belief)
 
-    mid_time = datetime.now(timezone.utc)
+    mid_time = datetime.now(UTC)
     time.sleep(0.3)
 
     for s in SCENARIOS:
@@ -334,7 +335,7 @@ def run_benchmark() -> None:
 
     with open(os.path.join(os.path.dirname(__file__), "..", "docs", "results", "benchmark_output.txt"), "w") as f:
         f.write(f"Anamnesis vs naive vector-store-only memory — {n} contradiction scenarios\n")
-        f.write(f"Run at: {datetime.now(timezone.utc).isoformat()}\n\n")
+        f.write(f"Run at: {datetime.now(UTC).isoformat()}\n\n")
         f.write(header + "\n")
         f.write(divider + "\n")
         f.write(now_row + "\n")

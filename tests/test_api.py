@@ -54,8 +54,9 @@ def test_why_endpoint_400_for_malformed_id():
 def test_why_endpoint_returns_provenance_for_real_belief():
     """Create a belief through the real API (chat), find it, and confirm
     its /why provenance response has the documented shape."""
-    from anamnesis.memory import Anamnesis
     import uuid
+
+    from anamnesis.memory import Anamnesis
 
     mem = Anamnesis()
     ep = mem.remember(uuid.uuid4(), "user", "user's favorite color is blue")

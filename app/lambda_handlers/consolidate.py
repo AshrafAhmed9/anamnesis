@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from anamnesis.memory import Anamnesis
 
@@ -21,7 +21,7 @@ def handler(event, context):
     decayed_rows = mem.decay()
 
     report = {
-        "run_at": datetime.now(timezone.utc).isoformat(),
+        "run_at": datetime.now(UTC).isoformat(),
         "consolidated_belief_ids": [str(i) for i in consolidated_ids],
         "decayed_rows": decayed_rows,
     }

@@ -58,7 +58,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("ANAMNESIS_MOCK_LLM", "1")
 os.environ.setdefault(
@@ -68,12 +68,12 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from anamnesis.agent.bedrock import BedrockClient  # noqa: E402
-from anamnesis.db.engine import get_engine, session_scope  # noqa: E402
-from anamnesis.db.models import Base  # noqa: E402
-from anamnesis.memory import Anamnesis  # noqa: E402
+from anamnesis.agent.bedrock import BedrockClient
+from anamnesis.db.engine import get_engine, session_scope
+from anamnesis.db.models import Base
+from anamnesis.memory import Anamnesis
 
 
 class AlwaysContradictLLM(BedrockClient):
@@ -218,7 +218,7 @@ def main() -> None:
 
     lines = [
         f"Concurrent-agent contention test: {args.topic_count} topics x {args.workers} workers, two scenarios\n",
-        f"Run at: {datetime.now(timezone.utc).isoformat()}\n",
+        f"Run at: {datetime.now(UTC).isoformat()}\n",
     ]
     lines += format_scenario(
         "SCENARIO A — contend over an EXISTING belief (the realistic shape of contention):", scenario_a
