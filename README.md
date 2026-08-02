@@ -64,6 +64,15 @@ It cannot tell you:
 Those require transactions, validity intervals, and a single consistent
 source of truth — CockroachDB, not a bolted-on ANN index.
 
+## What it looks like
+
+The live memory panel: a belief that was contradicted is struck through
+with an arrow to what replaced it, and clicking any belief answers "why do
+you believe this?" — showing the exact turn it was learned from, what it
+superseded, and its audit history.
+
+![Anamnesis belief provenance and supersede timeline](docs/provenance-screenshot.png)
+
 ## Architecture
 
 ![Anamnesis architecture diagram](docs/architecture.png)
