@@ -32,6 +32,11 @@ CockroachDB.
 - When a new statement contradicts an existing belief, the agent detects it
   (vector similarity + LLM judgment), supersedes the old belief instead of
   silently overwriting it, and keeps a full `superseded_by` audit chain.
+- For any belief, the agent can answer **"why do you believe this?"** —
+  reconstructing the exact conversation turns it was formed from (evidence),
+  the belief it replaced and the one that replaced it (lineage), and its full
+  audit history. A similarity score is not a reason; this is the trust and
+  explainability question a vector store structurally cannot answer.
 - A scheduled job folds low-salience episodic chatter into durable semantic
   beliefs and decays what's no longer relevant — memory that forgets on
   purpose, not just accumulates forever.
@@ -49,10 +54,11 @@ CockroachDB.
 
 **Why this matters:** a vector store can tell you "these 5 memories are
 similar." It can't tell you which of them is still true, when it stopped
-being true, what the agent believed at a point in time, or guarantee an
-update and its audit trail land together under a mid-write failure. Those
-require transactions, validity intervals, and one consistent source of
-truth — which is what CockroachDB is for.
+being true, what the agent believed at a point in time, *why* it holds a
+belief and on what evidence, or guarantee an update and its audit trail
+land together under a mid-write failure. Those require transactions,
+validity intervals, and one consistent source of truth — which is what
+CockroachDB is for.
 
 ## CockroachDB tools used (how)
 

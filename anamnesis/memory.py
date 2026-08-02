@@ -450,6 +450,99 @@ class Anamnesis:
 
         return run_in_transaction(_do)
 
+    def explain_belief(self, belief_id: uuid.UUID) -> dict:
+        """Reconstruct the full causal provenance of a single belief:
+        *why* the agent holds it, *what evidence* formed it, and *how it
+        has changed* — the trust/explainability question a vector store
+        structurally cannot answer (a similarity score is not a reason).
+
+        Returns a plain dict (JSON-friendly, for the /why API endpoint and
+        the UI's provenance drawer):
+
+          - belief:      the belief row itself (text, confidence, validity)
+          - evidence:    the episodic memories in source_episodes — the
+                         actual user/agent turns this belief was distilled
+                         from, with their content, role, session, timestamp
+          - supersedes:  the prior belief THIS one replaced (if any) — one
+                         step back along the lineage
+          - superseded_by: the belief that replaced THIS one (if any) —
+                         one step forward; non-null means this belief is
+                         historical, not currently held
+          - history:     every memory_audit row for this belief, oldest
+                         first — WRITE / SUPERSEDE / CONSOLIDATE / etc., the
+                         immutable log of everything that ever happened to it
+
+        All of this is read in one snapshot so the evidence, lineage, and
+        audit trail are mutually consistent.
+        """
+        with session_scope() as db:
+            belief_row = db.execute(
+                text(
+                    """
+                    SELECT id, belief, confidence, valid_from, valid_to,
+                           superseded_by, source_episodes
+                    FROM semantic_memory WHERE id = :id
+                    """
+                ),
+                {"id": str(belief_id)},
+            ).fetchone()
+            if belief_row is None:
+                raise KeyError(f"no belief with id {belief_id}")
+
+            source_ids = list(belief_row.source_episodes or [])
+            evidence = []
+            if source_ids:
+                evidence = db.execute(
+                    text(
+                        """
+                        SELECT id, session_id, role, content, salience, created_at
+                        FROM episodic_memory
+                        WHERE id = ANY(:ids)
+                        ORDER BY created_at
+                        """
+                    ),
+                    {"ids": [str(s) for s in source_ids]},
+                ).fetchall()
+
+            # One step back: the belief this one superseded (i.e. the row
+            # whose superseded_by points AT us). One step forward: the row
+            # our own superseded_by points at.
+            supersedes = db.execute(
+                text(
+                    "SELECT id, belief, valid_from, valid_to FROM semantic_memory "
+                    "WHERE superseded_by = :id"
+                ),
+                {"id": str(belief_id)},
+            ).fetchone()
+            superseded_by = None
+            if belief_row.superseded_by is not None:
+                superseded_by = db.execute(
+                    text(
+                        "SELECT id, belief, valid_from, valid_to FROM semantic_memory "
+                        "WHERE id = :id"
+                    ),
+                    {"id": str(belief_row.superseded_by)},
+                ).fetchone()
+
+            history = db.execute(
+                text(
+                    "SELECT action, reason, at FROM memory_audit "
+                    "WHERE memory_id = :id ORDER BY at"
+                ),
+                {"id": str(belief_id)},
+            ).fetchall()
+
+        def _row(r):
+            return dict(r._mapping) if r is not None else None
+
+        return {
+            "belief": _row(belief_row),
+            "evidence": [_row(e) for e in evidence],
+            "supersedes": _row(supersedes),
+            "superseded_by": _row(superseded_by),
+            "history": [_row(h) for h in history],
+        }
+
     def decay(self, rate: float = 0.05) -> int:
         """Age out episodic salience; audit the sweep. Returns rows touched."""
 

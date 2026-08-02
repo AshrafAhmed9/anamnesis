@@ -135,3 +135,32 @@ def test_survives_simulated_connection_loss_mid_write(mem, session_id):
 
         retry_rows = db.execute(select(MemoryAudit).where(MemoryAudit.action == "RETRY")).scalars().all()
         assert len(retry_rows) >= 1, "no RETRY row was audited for the simulated connection loss"
+
+
+def test_explain_belief_traces_evidence_and_lineage(mem, session_id):
+    """explain_belief() must reconstruct a belief's provenance: the source
+    episode(s) it was formed from, the belief it superseded, and its audit
+    history — the trust/explainability capability a vector store can't
+    offer. Uses the real remember()->detect_and_resolve_contradiction()
+    path with an actual source episode id, exactly as agent/loop.py wires
+    it, rather than the empty source list the older tests pass."""
+    ep_id = mem.remember(session_id, "user", "user is vegetarian")
+    first = mem.detect_and_resolve_contradiction("user is vegetarian", source_episode_ids=[ep_id])
+
+    exp = mem.explain_belief(first.id)
+    assert exp["belief"]["belief"] == "user is vegetarian"
+    # the evidence is the exact episode we passed as the source
+    assert [e["id"] for e in exp["evidence"]] == [ep_id]
+    assert exp["evidence"][0]["content"] == "user is vegetarian"
+    # a freshly-created, never-contradicted belief has no lineage yet
+    assert exp["supersedes"] is None
+    assert exp["superseded_by"] is None
+    # and at minimum its own creation is in the audit history
+    assert any(h["action"] == "WRITE" for h in exp["history"])
+
+
+def test_explain_belief_unknown_id_raises_keyerror(mem):
+    import uuid
+
+    with pytest.raises(KeyError):
+        mem.explain_belief(uuid.uuid4())

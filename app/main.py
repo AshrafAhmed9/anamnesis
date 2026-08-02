@@ -130,6 +130,22 @@ def belief_timeline():
     return [dict(r._mapping) for r in rows]
 
 
+@app.get("/memory/beliefs/{belief_id}/why")
+def explain_belief(belief_id: str):
+    """Full causal provenance of one belief — the evidence that formed it,
+    what it superseded / was superseded by, and its complete audit history.
+    This is the trust question a vector store can't answer: not "what's
+    similar" but "why do you believe this, and how do you know."
+    """
+    mem = Anamnesis()
+    try:
+        return mem.explain_belief(uuid.UUID(belief_id))
+    except KeyError:
+        return JSONResponse(status_code=404, content={"detail": "no such belief"})
+    except ValueError:
+        return JSONResponse(status_code=400, content={"detail": "malformed belief id"})
+
+
 @app.get("/memory/audit")
 def audit_stream(limit: int = 50):
     with session_scope() as db:

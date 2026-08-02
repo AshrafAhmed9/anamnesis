@@ -33,6 +33,43 @@ def test_audit_endpoint():
     assert isinstance(resp.json(), list)
 
 
+def test_belief_timeline_endpoint():
+    resp = client.get("/memory/beliefs/timeline")
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+def test_why_endpoint_404_for_unknown_belief():
+    import uuid
+
+    resp = client.get(f"/memory/beliefs/{uuid.uuid4()}/why")
+    assert resp.status_code == 404
+
+
+def test_why_endpoint_400_for_malformed_id():
+    resp = client.get("/memory/beliefs/not-a-uuid/why")
+    assert resp.status_code == 400
+
+
+def test_why_endpoint_returns_provenance_for_real_belief():
+    """Create a belief through the real API (chat), find it, and confirm
+    its /why provenance response has the documented shape."""
+    from anamnesis.memory import Anamnesis
+    import uuid
+
+    mem = Anamnesis()
+    ep = mem.remember(uuid.uuid4(), "user", "user's favorite color is blue")
+    belief = mem.detect_and_resolve_contradiction(
+        "user's favorite color is blue", source_episode_ids=[ep]
+    )
+    resp = client.get(f"/memory/beliefs/{belief.id}/why")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["belief"]["belief"] == "user's favorite color is blue"
+    assert isinstance(body["evidence"], list)
+    assert body["evidence"][0]["id"] == str(ep)
+
+
 def test_metrics_endpoint():
     resp = client.get("/metrics")
     assert resp.status_code == 200

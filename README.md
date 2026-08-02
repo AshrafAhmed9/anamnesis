@@ -16,6 +16,7 @@ Anamnesis is a memory layer for AI agents with:
 - **Episodic + semantic memory** — raw events and consolidated beliefs, not just a flat vector store.
 - **Time-travel** — beliefs carry `valid_from`/`valid_to` validity intervals, so the agent can answer "what did you believe last week?", not just "what do you believe now?"
 - **Contradiction detection & self-correction** — new beliefs are checked against existing ones (vector similarity + LLM judgment); contradictions supersede the old belief instead of silently overwriting it, with a full `superseded_by` chain.
+- **Belief provenance / "why do you believe this?"** — for any belief the agent can reconstruct its full causal story: the exact conversation turns it was distilled from (evidence), the belief it replaced and the one that replaced it (lineage), and its complete audit history. A similarity score is not a reason; this is the trust/explainability question a vector store structurally cannot answer. (`Anamnesis.explain_belief()`, `GET /memory/beliefs/{id}/why`, and click any belief in the UI.)
 - **Consolidation & forgetting** — an LLM-driven job folds low-salience episodic chatter into durable semantic beliefs and decays what's no longer relevant.
 - **Full auditability** — every memory write, supersede, consolidation, decay, and transaction retry is logged to an immutable `memory_audit` table, in the same transaction as the change it records.
 - **Survivability** — memory writes are wrapped in CockroachDB SERIALIZABLE transactions with automatic client-side retry on both contention (SQLSTATE `40001`) and lost/killed connections mid-write (`connection_invalidated`); the whole unit of work — reads and writes — is redone from scratch on retry via `run_in_transaction()`, so a write either fully lands (episode + belief + audit together) or doesn't happen at all. Covered by a test that injects a simulated dropped connection and asserts the write survives.
@@ -24,15 +25,31 @@ Anamnesis is a memory layer for AI agents with:
 
 The demo agent is a **customer support agent** that remembers a specific
 customer across every ticket and session — not a generic "personal
-assistant." Concretely (this is exactly what the UI's "Load demo data"
-button seeds): a customer mentions they're on the Free plan; later in the
-same history they mention upgrading to Pro. The agent catches the
-contradiction between the two, updates its belief to the current plan, and
-keeps a record of when the plan changed — so a later session can recall
-the current plan without being re-told, and can still correctly answer
-"what plan were they on before the upgrade" via time-travel. That's the
-kind of thing a real support team needs (an accurate account history) and
-a plain vector-store chatbot cannot reliably do (see the benchmark below).
+assistant."
+
+**The problem it solves is a real, expensive one.** Support agents (human
+or AI) fail in two ways that both come down to memory: they re-ask what
+the customer already told them (the "can you confirm your account again?"
+that drives customers up the wall), and — worse — they act on *stale*
+information the customer already corrected. An AI agent backed by a plain
+vector store makes the second failure constantly: it retrieves the five
+most *similar* past messages, with no notion of which are still true. So
+it happily tells a customer who upgraded to Pro last month that a feature
+"isn't available on your Free plan," because "Free plan" is still sitting
+in the vector index looking similar. That's not a hypothetical — it's the
+default behavior of similarity-only memory, and it's measurable (see the
+benchmark below: 2/12 vs 9/12 correct on exactly this kind of question).
+
+Concretely (this is exactly what the UI's "Load demo data" button seeds):
+a customer mentions they're on the Free plan; later in the same history
+they mention upgrading to Pro. The agent catches the contradiction,
+updates its belief to the current plan, records *when* it changed, and can
+show *why* it believes the current plan (the exact message it learned it
+from) — so a later session recalls the current plan without re-asking,
+still answers "what plan were they on before the upgrade" via time-travel,
+and can justify its answer instead of just asserting it. That accurate,
+explainable account history is what a real support team needs and what a
+similarity-only chatbot structurally cannot provide.
 
 ## Why this is a database problem, not a vector-store problem
 
@@ -41,6 +58,7 @@ It cannot tell you:
 - which of those memories is still true,
 - when it stopped being true and what replaced it,
 - what the agent believed as of a specific point in time,
+- *why* it holds a given belief — the actual evidence and the chain of revisions behind it,
 - or guarantee that a belief update and its audit trail land together, even under a mid-write failure.
 
 Those require transactions, validity intervals, and a single consistent

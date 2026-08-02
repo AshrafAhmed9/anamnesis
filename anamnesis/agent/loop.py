@@ -31,7 +31,7 @@ class Agent:
         self.llm = get_client()
 
     def turn(self, user_message: str) -> str:
-        self.memory.remember(self.session_id, "user", user_message)
+        user_episode_id = self.memory.remember(self.session_id, "user", user_message)
 
         episodes, beliefs = self.memory.recall(user_message, k=5)
         context_lines = []
@@ -49,13 +49,21 @@ class Agent:
         )
         self.memory.remember(self.session_id, "agent", reply)
 
-        self._maybe_extract_belief(user_message)
+        self._maybe_extract_belief(user_message, user_episode_id)
         return reply
 
-    def _maybe_extract_belief(self, user_message: str) -> None:
+    def _maybe_extract_belief(self, user_message: str, source_episode_id: uuid.UUID) -> None:
         candidate = self.llm.chat(
             [ChatMessage(role="user", content=BELIEF_EXTRACTION_PROMPT.format(message=user_message))],
             system=STRUCTURED_TASK_SYSTEM_PROMPT,
         ).strip()
         if candidate and candidate.upper() != "NONE":
-            self.memory.detect_and_resolve_contradiction(candidate, source_episode_ids=[])
+            # Pass the ID of the exact user turn this belief was extracted
+            # from, so semantic_memory.source_episodes records real
+            # provenance — this is what Anamnesis.explain_belief() surfaces
+            # as the "evidence" for a belief. Previously an empty list was
+            # passed here, which silently left every agent-formed belief
+            # with no traceable evidence.
+            self.memory.detect_and_resolve_contradiction(
+                candidate, source_episode_ids=[source_episode_id]
+            )

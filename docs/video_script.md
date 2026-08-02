@@ -48,7 +48,20 @@ one on camera):
 > runs on a free local model instead; the integration code for Bedrock
 > itself is real and ready the moment access clears."
 
-## 0:50–1:20 — Time-travel over beliefs
+## 0:50–1:05 — "Why do you believe this?" (the trust beat)
+
+Stay on the same memory panel. Click the now-active belief — the
+provenance drawer expands inline, showing three things:
+- **Evidence**: the exact user turn the belief was distilled from.
+- **Lineage**: "Replaced: I am a vegetarian and do not eat meat."
+- **Audit history**: the WRITE row.
+
+> "And it's not a black box. Ask why it believes something and it shows
+> you the exact message it learned it from, what that replaced, and the
+> full audit trail. A vector store gives you a similarity score — that's
+> not a reason. This is."
+
+## 1:05–1:30 — Time-travel over beliefs
 
 - Terminal: run `scripts/mvcc_timetravel_demo.py` (or paste the two
   queries live) showing `beliefs_asof(before)` vs `beliefs_asof(now)`
@@ -60,7 +73,7 @@ one on camera):
 > "The agent can answer not just what it believes now, but what it believed
 > last week — real time travel, not a changelog bolted on after the fact."
 
-## 1:20–2:00 — Survivability (node-kill demo, live)
+## 1:30–2:05 — Survivability (node-kill demo, live)
 
 - Terminal: run `make node-kill-demo` (or replay the recorded output at
   1.5x if the live run is too slow for pacing) — show writes streaming,
@@ -71,7 +84,7 @@ one on camera):
 > client both route around it. Every write lands. This is what makes
 > memory a database problem: a vector store alone doesn't give you this."
 
-## 2:00–2:25 — CockroachDB tool integration, fast montage
+## 2:05–2:30 — CockroachDB tool integration, fast montage
 
 - 5s: `CREATE VECTOR INDEX` in the migration file (vector indexing)
 - 5s: MCP client query against `semantic_memory` (managed MCP server)
@@ -83,7 +96,7 @@ one on camera):
 > "Four CockroachDB agent tools, all genuinely load-bearing, not just
 > initialized."
 
-## 2:25–2:45 — Close: what it's deployed on, and impact
+## 2:30–2:55 — Close: what it's deployed on, and impact
 
 - Show the live AWS Lambda Function URL responding in the browser (proves
   "deployed on AWS," not just local).
@@ -91,8 +104,13 @@ one on camera):
   correctly recalls plan changes and preferences across sessions instead
   of re-asking — 9/12 vs 2/12 correct recall in our own benchmark.
 
-> "Built on CockroachDB, deployed on AWS Lambda and Bedrock. Anamnesis:
-> memory an agent can actually trust."
+> "Built on CockroachDB, deployed on AWS Lambda, S3, and EventBridge.
+> Anamnesis: memory an agent can actually trust — because it can show you
+> why."
+
+(Deliberately does NOT claim live Bedrock — it's blocked on this account
+and that's disclosed in the README; don't undercut the honesty that's a
+strength elsewhere by overclaiming it here on camera.)
 
 Cut to black on the repo URL.
 
@@ -117,7 +135,7 @@ Cut to black on the repo URL.
 
 ## Recording checklist
 - [ ] Practice run of the 0:15 contradiction scene done, worked correctly
-- [ ] AWS deployment live before recording the 2:25 shot
+- [ ] AWS deployment live before recording the closing (2:30) shot
 - [ ] `docs/results/*.txt` outputs match what's shown on screen (no staged fakes)
 - [ ] Captions/subtitles not required but consider burning in the key numbers
       (30/30, 9/12 vs 2/12) as on-screen text for skimmers

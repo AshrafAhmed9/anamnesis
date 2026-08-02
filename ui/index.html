@@ -35,8 +35,24 @@
   .section h3 { font-size: 12px; color: var(--accent2); text-transform: uppercase;
     letter-spacing: 0.05em; margin: 0 0 8px; }
   .belief { padding: 8px 10px; background: var(--panel); border-radius: 6px; margin-bottom: 6px;
-    font-size: 13px; border-left: 3px solid var(--accent); }
+    font-size: 13px; border-left: 3px solid var(--accent); cursor: pointer; }
+  .belief:hover { border-left-width: 5px; }
   .belief .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .belief .why-hint { color: var(--accent); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-top: 4px; opacity: 0; transition: opacity 0.15s; }
+  .belief:hover .why-hint { opacity: 1; }
+  .provenance { margin-top: 8px; padding: 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; }
+  .provenance h4 { margin: 8px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--accent2); }
+  .provenance h4:first-child { margin-top: 0; }
+  .prov-evidence { color: var(--text); border-left: 2px solid var(--accent); padding-left: 8px; margin: 3px 0; }
+  .prov-evidence .who { color: var(--muted); font-size: 10px; }
+  .prov-lineage { color: var(--muted); }
+  .prov-lineage b { color: var(--text); font-weight: 600; }
+  .prov-hist { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+  .prov-hist .action { color: var(--accent2); font-weight: 600; }
+  .prov-hist .action.SUPERSEDE { color: var(--danger); }
   .belief.superseded { border-left-color: var(--danger); opacity: 0.75; }
   .belief.superseded .belief-text { text-decoration: line-through; text-decoration-color: var(--danger); color: var(--muted); }
   .belief .arrow { color: var(--danger); font-weight: 700; margin: 0 4px; }
@@ -154,6 +170,34 @@ function ChatPanel({ onMemoryChange }) {
   );
 }
 
+function ProvenanceView({ data }) {
+  if (!data) return <div className="provenance">Loading provenance…</div>;
+  if (data.error || data.detail) return <div className="provenance">Couldn't load provenance.</div>;
+  return (
+    <div className="provenance" onClick={e => e.stopPropagation()}>
+      <h4>Evidence — the turns this belief was formed from</h4>
+      {(!data.evidence || data.evidence.length === 0)
+        ? <div className="prov-lineage">No source episodes recorded for this belief.</div>
+        : data.evidence.map(e => (
+            <div className="prov-evidence" key={e.id}>
+              {e.content}
+              <div className="who">{e.role} · {new Date(e.created_at).toLocaleString()}</div>
+            </div>
+          ))}
+      {(data.supersedes || data.superseded_by) && <h4>Lineage</h4>}
+      {data.supersedes && <div className="prov-lineage">Replaced: <b>{data.supersedes.belief}</b></div>}
+      {data.superseded_by && <div className="prov-lineage">Superseded by: <b>{data.superseded_by.belief}</b></div>}
+      <h4>Audit history</h4>
+      {data.history && data.history.map((h, i) => (
+        <div className="prov-hist" key={i}>
+          <span className={"action " + h.action}>{h.action}</span> {new Date(h.at).toLocaleTimeString()}
+          {h.reason ? " — " + h.reason : ""}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MemoryPanel({ refreshKey, triggerRefresh }) {
   // /memory/beliefs/timeline (not the currently-active-only /memory/beliefs)
   // so a superseded belief stays visible with a struck-through line to
@@ -163,8 +207,21 @@ function MemoryPanel({ refreshKey, triggerRefresh }) {
   const [audit, refetchAudit] = useApi("/memory/audit", 3000);
   const seenIds = useRef(new Set());
   const [freshIds, setFreshIds] = useState(new Set());
+  const [openId, setOpenId] = useState(null);      // which belief's provenance is expanded
+  const [provenance, setProvenance] = useState(null);
 
   useEffect(() => { refetchTimeline(); refetchAudit(); }, [refreshKey]);
+
+  // "Why do you believe this?" — fetch a belief's full causal provenance
+  // (evidence episodes + supersede lineage + audit history) on click.
+  const toggleWhy = async (id) => {
+    if (openId === id) { setOpenId(null); setProvenance(null); return; }
+    setOpenId(id); setProvenance(null);
+    try {
+      const resp = await fetch(API_BASE + "/memory/beliefs/" + id + "/why");
+      setProvenance(await resp.json());
+    } catch (e) { setProvenance({ error: true }); }
+  };
 
   // Track which rows are new-since-last-poll so we can flash them —
   // makes a supersede event visually unmissable instead of a silent
@@ -206,6 +263,7 @@ function MemoryPanel({ refreshKey, triggerRefresh }) {
             <div
               className={"belief" + (isSuperseded ? " superseded" : "") + (justChanged ? (isSuperseded ? " superseded" : " active-new") : "")}
               key={b.id}
+              onClick={() => toggleWhy(b.id)}
             >
               <span className="belief-text">{b.belief}</span>
               {isSuperseded && b.superseded_by_belief && (
@@ -218,6 +276,8 @@ function MemoryPanel({ refreshKey, triggerRefresh }) {
                 confidence {Number(b.confidence).toFixed(2)} · since {new Date(b.valid_from).toLocaleString()}
                 {isSuperseded ? ` · superseded ${new Date(b.valid_to).toLocaleString()}` : " · active"}
               </div>
+              <div className="why-hint">{openId === b.id ? "▾ hide provenance" : "▸ why do you believe this?"}</div>
+              {openId === b.id && <ProvenanceView data={provenance} />}
             </div>
           );
         })}
