@@ -42,6 +42,16 @@ memory layer — more than toy queries?
   `EXPLAIN ANALYZE` confirms the vector index is actually used (a real
   `• vector search` plan node against `episodic_embedding_idx`, not a
   disguised full scan) — [`docs/results/explain_analyze_vector_index.txt`](docs/results/explain_analyze_vector_index.txt).
+- **Belief provenance — "why do you believe this?"**: `Anamnesis.explain_belief()`
+  reconstructs a belief's full causal story from data already in the
+  schema (no extra tables) — the source episode(s) it was distilled from,
+  the belief it superseded and the one that superseded it, and its full
+  `memory_audit` history, all read in one consistent snapshot. Exposed as
+  `GET /memory/beliefs/{id}/why` and a click-to-expand drawer on every
+  belief in the UI. A vector store gives you a similarity score, not a
+  reason — this is the trust/explainability question it structurally
+  cannot answer, verified end-to-end (`tests/test_memory.py`,
+  `tests/test_api.py`) and visually (`docs/provenance-screenshot.png`).
 - **Two independent kinds of time-travel**, not one: bitemporal
   (`valid_from`/`valid_to`, application-level) side by side with true
   physical `AS OF SYSTEM TIME` MVCC recovery — `scripts/mvcc_timetravel_demo.py`,
@@ -166,9 +176,16 @@ Quality engineering, correct and safe tool usage.
   demo data" button seeding this scenario, so the differentiating features
   are visible within seconds, not after ten manually-typed messages.
 - **Quantified gap vs. what most teams will ship** (a vector-store-only
-  agent): see the benchmark numbers above — this is the difference between
-  a support agent that gets a customer's current situation right 75% of
-  the time vs 17% of the time.
+  agent): see the benchmark numbers above — at 50 realistic scenarios,
+  Anamnesis gets a customer's current situation right roughly 4x as often
+  as a plain vector store (48% vs 12%), and can *justify* that answer with
+  evidence, which the vector-store baseline has no mechanism to do at all.
+- **Explainability as a real workflow feature, not a compliance checkbox**:
+  a support agent (or its human supervisor) that can be asked "why do you
+  believe the customer is on the Pro plan?" and shown the exact message
+  they said it in, rather than just asserting it, is the difference
+  between a tool an agent trusts unsupervised and one that needs a human
+  double-checking every claim.
 
 ## 4. Production Readiness
 
@@ -207,6 +224,11 @@ Quality engineering, correct and safe tool usage.
   overwriting — `superseded_by` links form an auditable history of the
   agent changing its mind, correctly serialized under real concurrent
   writers via row-level locking.
+- **Belief provenance**: the agent can answer "why do you believe this?"
+  with real evidence (the exact conversation turn), lineage, and audit
+  history — not just "what's similar." Most entries will demonstrate an
+  agent that remembers; few will demonstrate one that can explain itself,
+  which is a materially different (and harder) claim about trust.
 - **Memory as a live stream**: a CDC changefeed turns every memory event
   into something a downstream system can react to in real time, not just
   poll for.
