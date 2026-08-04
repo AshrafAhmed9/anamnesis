@@ -19,7 +19,14 @@ a terminal with the font size bumped to ~18–20pt so it's readable at
 3. Bring up the 3-node cluster now (not during recording — it's slow):
    `make multinode-up`. Confirm it's healthy: `docker ps` shows
    `infra-crdb-1-1`, `infra-crdb-2-1`, `infra-crdb-3-1` all `Up`.
-4. Start the app: `uvicorn app.main:app --port 8000` in one terminal tab.
+4. Start the app **with an explicit DATABASE_URL**, not just `uvicorn app.main:app --port 8000`
+   on its own — `.env` in this repo points at the live CockroachDB Cloud cluster, not your fresh
+   local one, so omitting this silently connects the demo to the wrong (and possibly
+   unreachable/500-erroring) database:
+   ```
+   DATABASE_URL="cockroachdb+psycopg://root@localhost:26257/anamnesis?sslmode=disable" \
+     uvicorn app.main:app --port 8000
+   ```
 5. Start the UI: `cd ui && python3 -m http.server 5173` in another tab.
 6. Open the browser to
    `http://localhost:5173/index.html?api=http://localhost:8000` — resize

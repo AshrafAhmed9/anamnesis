@@ -315,6 +315,15 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Pinned to @7 (was unpinned "latest"): unpkg silently resolved to
+     @babel/standalone@8, whose bundle uses dynamic import() internally
+     and breaks with "Cannot use import statement outside a module" when
+     loaded as a plain classic <script> the way this page's in-browser
+     JSX transform relies on. Found by actually loading the page and
+     reading the console error, not by inspection — the same "unpinned
+     dependency silently changed behavior" class of bug as this repo's
+     ruff CI regression. v7 is the last major version compatible with
+     this classic-script pattern. -->
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 </body>
 </html>
