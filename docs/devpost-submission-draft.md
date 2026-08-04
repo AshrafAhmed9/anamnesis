@@ -1,6 +1,6 @@
 # Devpost submission draft — Anamnesis
 
-Copy/paste ready. Fill in the ⬜ placeholders once the demo URL and video exist.
+Copy/paste ready — all links filled in, nothing left as a placeholder. Ready to submit.
 
 ---
 
@@ -13,7 +13,7 @@ Agentic memory as a distributed SQL problem — transactional, temporal, self-co
 ## Links
 - **GitHub repo:** https://github.com/AshrafAhmed9/anamnesis
 - **Demo URL:** https://5y52iimwosyg62vshke43wivtu0wspsd.lambda-url.us-east-1.on.aws/ (live Lambda Function URL — try `POST /demo/seed` then `POST /chat`, or `GET /metrics`)
-- **Video:** ⬜ (YouTube/Vimeo link, public, ≤3 min)
+- **Video:** https://www.youtube.com/watch?v=QRJ3QCCtS0c
 
 ## Text description
 

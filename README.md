@@ -5,6 +5,7 @@
 **Built for the [CockroachDB × AWS Hackathon](https://cockroachdb-ai.devpost.com) — Build with Agentic Memory.**
 **→ [SUBMISSION.md](SUBMISSION.md) maps every judging criterion to exact evidence in this repo.**
 **→ Live demo (deployed on AWS Lambda + CockroachDB Cloud): https://5y52iimwosyg62vshke43wivtu0wspsd.lambda-url.us-east-1.on.aws/ — try `POST /demo/seed`, then `POST /chat`, or `GET /metrics`.**
+**→ Demo video (<3 min): https://www.youtube.com/watch?v=QRJ3QCCtS0c**
 
 > Everyone bolts a vector store onto an agent and calls it memory. Real memory is
 > *transactional, temporal, and self-correcting* — which makes it a database
