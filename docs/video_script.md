@@ -175,12 +175,11 @@ python3 scripts/node_kill_demo.py
 
 Four ~6-second beats, hard cuts, no narration pauses between them — keep pace brisk.
 
-**2:05–2:11** — Terminal [A] (SQL shell). Run:
-```sql
-EXPLAIN ANALYZE SELECT id, belief FROM semantic_memory
-  ORDER BY embedding <-> '[0,0,0]' LIMIT 5;
-```
-(Any short zero-ish vector literal is fine — the point is the plan output.) As soon as a line containing `vector search` appears in the plan, freeze/pause. If typing the full 1024-dim literal live is impractical, instead just open `docs/results/explain_analyze_vector_index.txt` in a text editor and show the `• vector search` plan line directly — say so isn't implied as literally typed live.
+**2:05–2:11** — Don't type this one live: the `embedding` column is 1024-dimensional, so a short
+placeholder vector like `[0,0,0]` fails with a dimension-mismatch error (found by actually trying
+it), and typing a real 1024-number literal on camera is impractical anyway. Instead, just open
+`docs/results/explain_analyze_vector_index.txt` in a text editor and show the `• vector search`
+plan line directly — this is real, saved output from a real run, not a live-typed command.
 
 **Caption (2:05, holds 6s):**
 `Distributed Vector Indexing — CREATE VECTOR INDEX, confirmed used by EXPLAIN ANALYZE (not a disguised full scan)`
