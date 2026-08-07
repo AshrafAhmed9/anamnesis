@@ -9,10 +9,11 @@ import os
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -24,6 +25,8 @@ app = FastAPI(title="Anamnesis", version="0.1.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+_UI_HTML_PATH = Path(__file__).resolve().parent.parent / "ui" / "index.html"
 
 _agents: dict[str, Agent] = {}
 _start_time = time.monotonic()
@@ -167,6 +170,30 @@ def trigger_consolidation():
     mem = Anamnesis()
     ids = mem.consolidate()
     return {"consolidated_belief_ids": [str(i) for i in ids]}
+
+
+@app.get("/", response_class=HTMLResponse)
+def demo_ui():
+    """Serves the actual chat + live-memory-panel UI at the root of the
+    deployed URL, same-origin, so a judge clicking the demo link lands
+    directly in the working interface — not a JSON API response.
+
+    Previously the deployed root had no route at all (404 "Not Found"),
+    which was the very first thing a judge clicking "Try it out" would
+    see. ui/index.html already supports this via its
+    window.ANAMNESIS_API_BASE hook (see ui/index.html's API_BASE
+    resolution order); setting it to "" makes every fetch same-origin
+    (fetch("" + "/chat") -> "/chat"), so this works identically on
+    localhost and on the real Lambda Function URL with no rebuild.
+    """
+    html = _UI_HTML_PATH.read_text()
+    injected = html.replace(
+        "<script type=\"text/babel\" data-presets=\"react\">",
+        "<script>window.ANAMNESIS_API_BASE = \"\";</script>\n"
+        "<script type=\"text/babel\" data-presets=\"react\">",
+        1,
+    )
+    return HTMLResponse(content=injected)
 
 
 @app.get("/health")

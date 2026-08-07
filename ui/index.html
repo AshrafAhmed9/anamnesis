@@ -80,9 +80,15 @@ const { useState, useEffect, useRef, useCallback } = React;
 // Resolution order: ?api=<url> query param (for hosting this static file
 // against any deployed backend without a rebuild) > window.ANAMNESIS_API_BASE
 // (set via an inline <script> before this one) > localhost default for dev.
-const API_BASE = new URLSearchParams(window.location.search).get("api")
-  || window.ANAMNESIS_API_BASE
-  || "http://localhost:8000";
+// Uses `!= null` (not `||`) because "" is a meaningful, intentional value
+// here — same-origin deployment (app/main.py's "/" route) sets
+// window.ANAMNESIS_API_BASE = "" on purpose so fetch("" + "/chat") hits
+// "/chat" on the same host — but "" is falsy in JS, so `||` would have
+// silently skipped it and fallen through to the localhost default.
+const _apiParam = new URLSearchParams(window.location.search).get("api");
+const API_BASE = _apiParam != null
+  ? _apiParam
+  : (window.ANAMNESIS_API_BASE != null ? window.ANAMNESIS_API_BASE : "http://localhost:8000");
 
 function useApi(path, intervalMs) {
   const [data, setData] = useState(null);
